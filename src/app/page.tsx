@@ -10,12 +10,14 @@ import AnalysisLoading from '@/components/analysis-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Lightbulb } from 'lucide-react';
 import type { FormSchema } from '@/components/analysis-form';
+import { useHistory } from '@/context/history-context';
 
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] =
     useState<AnalyzeResumeAgainstJobDescriptionOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { addHistoryItem } = useHistory();
 
   const handleAnalysis = async (data: FormSchema) => {
     setIsLoading(true);
@@ -25,6 +27,10 @@ export default function Home() {
 
     if (result.success && result.data) {
       setAnalysisResult(result.data);
+      addHistoryItem({
+        job_title: result.data.job_title,
+        company: result.data.company,
+      });
     } else {
       toast({
         variant: 'destructive',

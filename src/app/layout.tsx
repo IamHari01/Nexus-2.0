@@ -13,10 +13,10 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { Home } from 'lucide-react';
 import { SidebarToggle } from '@/components/sidebar-toggle';
+import { HistoryProvider } from '@/context/history-context';
+import HistoryList from '@/components/history-list';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -41,36 +41,31 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('min-h-screen bg-background font-body antialiased', inter.variable)} suppressHydrationWarning>
-        <SidebarProvider>
-          <Sidebar collapsible="icon">
-            <SidebarHeader>
-              <Logo />
-            </SidebarHeader>
-            <SidebarContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive>
-                    <a href="#">
-                      <Home />
-                      <span>Home</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarContent>
-            <SidebarFooter>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarToggle />
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarFooter>
-          </Sidebar>
-          <SidebarInset>
-            <main className="flex-1">{children}</main>
-          </SidebarInset>
-          <Toaster />
-        </SidebarProvider>
+        <HistoryProvider>
+          <SidebarProvider>
+            <Sidebar collapsible="icon">
+              <SidebarHeader>
+                <a href="/" aria-label="Home">
+                  <Logo />
+                </a>
+              </SidebarHeader>
+              <SidebarContent>
+                <HistoryList />
+              </SidebarContent>
+              <SidebarFooter>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarToggle />
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarFooter>
+            </Sidebar>
+            <SidebarInset>
+              <main className="flex-1">{children}</main>
+            </SidebarInset>
+            <Toaster />
+          </SidebarProvider>
+        </HistoryProvider>
       </body>
     </html>
   );
