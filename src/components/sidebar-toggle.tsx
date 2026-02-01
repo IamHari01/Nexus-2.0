@@ -1,14 +1,14 @@
 'use client';
 
 import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
-import { Target } from 'lucide-react';
+import { NexusIcon } from './nexus-icon';
 
 export function SidebarToggle() {
     const { toggleSidebar, state } = useSidebar();
 
     return (
         <SidebarMenuButton onClick={toggleSidebar}>
-            <Target />
+            <NexusIcon />
             <span>{state === 'expanded' ? 'Collapse' : 'Expand'}</span>
         </SidebarMenuButton>
     )
