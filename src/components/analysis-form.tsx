@@ -22,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles } from 'lucide-react';
+import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, Upload } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import React from 'react';
 
 const formSchema = z.object({
   resumeText: z.string().min(100, 'Resume text must be at least 100 characters.'),
@@ -50,6 +52,36 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
       careerLevel: 'Junior',
     },
   });
+
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    fieldName: 'resumeText' | 'jobDescription'
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        form.setValue(fieldName, text, { shouldValidate: true });
+        toast({
+          title: 'File Content Loaded',
+          description: `Successfully loaded content from ${file.name}. Note: Complex formats (PDF, DOCX) may not parse correctly.`,
+        });
+      };
+      reader.onerror = () => {
+        toast({
+          variant: 'destructive',
+          title: 'File Read Error',
+          description: 'There was an error reading the file.',
+        });
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+    // Reset file input value to allow re-uploading the same file
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
 
   return (
     <Card>
@@ -119,10 +151,25 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
               name="resumeText"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
+                   <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
+                    <Button variant="ghost" size="icon" asChild>
+                      <label htmlFor="resume-upload" className="cursor-pointer">
+                        <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+                        <span className="sr-only">Upload Resume</span>
+                      </label>
+                    </Button>
+                    <Input
+                      id="resume-upload"
+                      type="file"
+                      className="hidden"
+                      accept=".txt,.md,.pdf,.doc,.docx"
+                      onChange={(e) => handleFileChange(e, 'resumeText')}
+                    />
+                  </div>
                   <FormControl>
                     <Textarea
-                      placeholder="Paste the full text of your resume here."
+                      placeholder="Paste the full text of your resume here, or upload a file."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
@@ -136,10 +183,25 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
               name="jobDescription"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Job Description</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Job Description</FormLabel>
+                     <Button variant="ghost" size="icon" asChild>
+                      <label htmlFor="jd-upload" className="cursor-pointer">
+                        <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+                        <span className="sr-only">Upload Job Description</span>
+                      </label>
+                    </Button>
+                    <Input
+                      id="jd-upload"
+                      type="file"
+                      className="hidden"
+                      accept=".txt,.md,.pdf,.doc,.docx"
+                      onChange={(e) => handleFileChange(e, 'jobDescription')}
+                    />
+                  </div>
                   <FormControl>
                     <Textarea
-                      placeholder="Paste the full job description text here."
+                      placeholder="Paste the full job description text here, or upload a file."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
