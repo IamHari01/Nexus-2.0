@@ -31,7 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 const formSchema = z.object({
-  resumeText: z.string().min(100, 'Resume text must be at least 100 characters. You can upload a PDF or TXT file.'),
+  resumeText: z.string().min(1, 'Resume is required. You can upload a PDF or TXT file.'),
   jobDescription: z.string().min(100, 'Job description must be at least 100 characters.'),
   targetJobTitle: z.string().min(2, 'Job title is required.'),
   targetLocation: z.string().min(2, 'Location is required.'),
@@ -185,7 +185,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 <FormItem>
                     <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
                     <FormControl>
-                        <>
+                        <div>
                             <input
                                 type="file"
                                 className="hidden"
@@ -217,7 +217,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                                     </Button>
                                 </div>
                             )}
-                        </>
+                        </div>
                     </FormControl>
                   <FormMessage />
                 </FormItem>
