@@ -9,7 +9,11 @@ export const NexusIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>
         className={cn("h-6 w-6", className)}
         {...props}
     >
-        <path d="M17.526 24V9.632L9.998 24H2V0h8.013v14.368L17.526 0H22v24h-4.474zM9.54 6.132c-1.635 1.5-3.213 2.94-4.71 4.32V2.4h4.71v3.732zm7.95 11.736c1.635-1.5,3.213-2.94-4.71-4.32v8.052h-4.71v-3.732z"/>
+        <path d="M5 3H8V21H5V3Z" />
+        <path d="M16 3H19V21H16V3Z" />
+        <path d="M8.2 4.9L16 14.1V11.5L9.5 3H8.2V4.9Z" />
+        <path d="M8.2 9.9L16 19.1V16.5L9.5 8H8.2V9.9Z" />
+        <path d="M8.2 14.9L14.5 21H16V19.1L9.5 13H8.2V14.9Z" />
     </svg>
   );
 };
