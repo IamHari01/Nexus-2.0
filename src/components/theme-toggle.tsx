@@ -18,7 +18,7 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton variant="ghost">
+        <SidebarMenuButton variant="ghost" tooltip="Settings">
           <Settings />
           <span>Settings</span>
         </SidebarMenuButton>

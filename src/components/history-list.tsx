@@ -5,8 +5,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarGroup,
-  SidebarGroupLabel,
 } from '@/components/ui/sidebar';
 import { FilePlus2, History as HistoryIcon } from 'lucide-react';
 
@@ -17,7 +15,7 @@ export default function HistoryList() {
     <>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton asChild>
+          <SidebarMenuButton asChild tooltip="New Analysis">
             <a href="/">
               <FilePlus2 />
               <span>New Analysis</span>
@@ -26,27 +24,24 @@ export default function HistoryList() {
         </SidebarMenuItem>
       </SidebarMenu>
 
-      <SidebarGroup>
-        <SidebarGroupLabel className="flex items-center gap-2">
-          <HistoryIcon />
-          Recent
-        </SidebarGroupLabel>
-        <SidebarMenu className="p-0">
+      <SidebarMenu>
           {history.length > 0 ? (
             history.map((item) => (
               <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton asChild variant="ghost" size="sm">
+                <SidebarMenuButton asChild variant="ghost" size="sm" tooltip={item.job_title}>
                   <a href="#">
+                    <HistoryIcon />
                     <span className="truncate">{item.job_title}</span>
                   </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))
           ) : (
-            <p className="px-2 text-xs text-muted-foreground">No history yet.</p>
+             <div className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                <p>No history yet.</p>
+            </div>
           )}
         </SidebarMenu>
-      </SidebarGroup>
     </>
   );
 }
