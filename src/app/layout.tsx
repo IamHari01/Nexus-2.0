@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/sidebar';
 import { HistoryProvider } from '@/context/history-context';
 import HistoryList from '@/components/history-list';
-import { PreferencesToggle } from '@/components/preferences-toggle';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -45,7 +44,6 @@ export default function RootLayout({
                 <a href="/" aria-label="Home">
                   <Logo />
                 </a>
-                <PreferencesToggle />
               </SidebarHeader>
               <SidebarContent>
                 <HistoryList />
