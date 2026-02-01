@@ -22,9 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, Upload } from 'lucide-react';
+import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, Upload, File, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import React from 'react';
+import React, { useState } from 'react';
 
 const formSchema = z.object({
   resumeText: z.string().min(100, 'Resume text must be at least 100 characters.'),
@@ -53,19 +53,27 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
     },
   });
 
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [jobDescriptionFileName, setJobDescriptionFileName] = useState<string | null>(null);
+
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
     fieldName: 'resumeText' | 'jobDescription'
   ) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (fieldName === 'resumeText') {
+        setResumeFileName(file.name);
+      } else {
+        setJobDescriptionFileName(file.name);
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
         form.setValue(fieldName, text, { shouldValidate: true });
         toast({
           title: 'File Content Loaded',
-          description: `Successfully loaded content from ${file.name}. Note: Complex formats (PDF, DOCX) may not parse correctly.`,
+          description: `Successfully loaded content from ${file.name}.`,
         });
       };
       reader.onerror = () => {
@@ -82,6 +90,16 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
       event.target.value = '';
     }
   };
+
+  const handleClearFile = (fieldName: 'resumeText' | 'jobDescription') => {
+    form.setValue(fieldName, '', { shouldValidate: true });
+    if (fieldName === 'resumeText') {
+      setResumeFileName(null);
+    } else {
+      setJobDescriptionFileName(null);
+    }
+  };
+
 
   return (
     <Card>
@@ -163,16 +181,35 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                       id="resume-upload"
                       type="file"
                       className="hidden"
-                      accept=".txt,.md,.pdf,.doc,.docx"
+                      accept=".txt,.md"
                       onChange={(e) => handleFileChange(e, 'resumeText')}
                     />
                   </div>
                   <FormControl>
+                    {resumeFileName ? (
+                      <div className="flex min-h-[150px] items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{resumeFileName}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleClearFile('resumeText')}
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="sr-only">Clear file</span>
+                        </Button>
+                      </div>
+                    ) : (
                     <Textarea
                       placeholder="Paste the full text of your resume here, or upload a file."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -195,16 +232,35 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                       id="jd-upload"
                       type="file"
                       className="hidden"
-                      accept=".txt,.md,.pdf,.doc,.docx"
+                      accept=".txt,.md"
                       onChange={(e) => handleFileChange(e, 'jobDescription')}
                     />
                   </div>
                   <FormControl>
+                  {jobDescriptionFileName ? (
+                      <div className="flex min-h-[150px] items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{jobDescriptionFileName}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleClearFile('jobDescription')}
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="sr-only">Clear file</span>
+                        </Button>
+                      </div>
+                    ) : (
                     <Textarea
                       placeholder="Paste the full job description text here, or upload a file."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
