@@ -13,7 +13,7 @@ export const NexusIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>
         className={cn("h-6 w-6", className)}
         {...props}
     >
-        <path d="M8 17V7l8 10V7" />
+        <path d="M8 17V7 L11.5 11.375 M12.5 12.625 L16 17 V7" />
     </svg>
   );
 };
