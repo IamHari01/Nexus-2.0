@@ -18,9 +18,7 @@ export default function NexusIcon({ className }: { className?: string }) {
           <stop offset="100%" stopColor="hsl(var(--destructive))" />
         </linearGradient>
       </defs>
-      <path d="M7 20V4" />
-      <path d="M7 4l10 16" />
-      <path d="M17 20V4" />
+      <path d="M6 20V4L18 20V4" />
     </svg>
   );
 }
