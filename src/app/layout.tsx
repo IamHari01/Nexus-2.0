@@ -55,6 +55,7 @@ export default function RootLayout({
             <SidebarProvider>
               <Sidebar>
                 <SidebarHeader>
+                  <Logo />
                   <SidebarTrigger />
                 </SidebarHeader>
                 <SidebarContent>
@@ -76,7 +77,6 @@ export default function RootLayout({
               </Sidebar>
               <SidebarInset>
                 <header className="flex h-12 items-center gap-4 border-b bg-background px-4 md:px-6">
-                    <Logo />
                     <h1 className="text-xl font-semibold text-foreground">NEXUS</h1>
                 </header>
                 <main className="flex-1">{children}</main>
