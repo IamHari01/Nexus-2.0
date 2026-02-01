@@ -20,6 +20,7 @@ import HistoryList from '@/components/history-list';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogOut } from 'lucide-react';
+import Logo from '@/components/logo';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -54,9 +55,7 @@ export default function RootLayout({
             <SidebarProvider>
               <Sidebar collapsible="icon">
                 <SidebarHeader>
-                  <span className="text-xl font-semibold text-foreground group-data-[state=collapsed]:hidden">
-                    NEXUS
-                  </span>
+                  <Logo />
                   <SidebarTrigger />
                 </SidebarHeader>
                 <SidebarContent>

@@ -23,7 +23,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH_ICON = "3.5rem" // Increased for the logo
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContext = {
@@ -263,7 +263,7 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, children, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state } = useSidebar();
 
   return (
     <Button
@@ -271,7 +271,7 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", className)}
+      className={cn("h-8 w-8 data-[state=collapsed]:hidden", state === 'collapsed' ? 'hidden' : '', className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
@@ -281,8 +281,8 @@ const SidebarTrigger = React.forwardRef<
       {children || <PanelLeft />}
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
-  )
-})
+  );
+});
 SidebarTrigger.displayName = "SidebarTrigger"
 
 const SidebarRail = React.forwardRef<
@@ -354,15 +354,35 @@ const SidebarHeader = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div">
 >(({ className, ...props }, ref) => {
-  return (
+  const { toggleSidebar, state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
+
+  const headerContent = (
     <div
       ref={ref}
       data-sidebar="header"
       className={cn("flex h-12 items-center justify-between p-2 group-data-[state=collapsed]:justify-center", className)}
       {...props}
     />
-  )
-})
+  );
+
+  if (isCollapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div onClick={toggleSidebar} className="cursor-pointer">
+            {headerContent}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="center">
+          <p>Expand</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return headerContent;
+});
 SidebarHeader.displayName = "SidebarHeader"
 
 const SidebarFooter = React.forwardRef<
