@@ -10,6 +10,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { HistoryProvider } from '@/context/history-context';
 import HistoryList from '@/components/history-list';
@@ -44,6 +45,7 @@ export default function RootLayout({
                 <a href="/" aria-label="Home">
                   <Logo />
                 </a>
+                <SidebarTrigger />
               </SidebarHeader>
               <SidebarContent>
                 <HistoryList />
