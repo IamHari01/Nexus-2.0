@@ -1,6 +1,5 @@
 'use client';
 
-import type { AnalyzeResumeAgainstJobDescriptionOutput } from '@/ai/flows/ats-resume-analysis';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +23,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Skeleton } from './ui/skeleton';
+import type { AnalysisResult } from '@/lib/types';
 
 
 function ProbabilityScore({ score }: { score: number }) {
@@ -77,7 +78,28 @@ function MatchBadge({ status }: { status: 'High' | 'Medium' | 'Low' }) {
     return <Badge className={cn('text-sm', statusStyles[status])}>{status} Match</Badge>
 }
 
-export default function AnalysisResults({ result }: { result: AnalyzeResumeAgainstJobDescriptionOutput }) {
+function RelatedJobsLoadingSkeleton() {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[...Array(2)].map((_, index) => (
+                <Card key={index} className="flex flex-col">
+                    <CardHeader>
+                        <Skeleton className="h-5 w-3/4" />
+                        <Skeleton className="h-4 w-1/2 mt-2" />
+                    </CardHeader>
+                    <CardContent className="flex-grow">
+                        <Skeleton className="h-4 w-1/3" />
+                    </CardContent>
+                    <CardFooter>
+                        <Skeleton className="h-9 w-full" />
+                    </CardFooter>
+                </Card>
+            ))}
+        </div>
+    )
+}
+
+export default function AnalysisResults({ result, isLoadingRelatedJobs }: { result: AnalysisResult, isLoadingRelatedJobs?: boolean }) {
   
   const priorityStyles = {
     Critical: 'border-red-500/50 bg-red-500/5',
@@ -153,7 +175,7 @@ export default function AnalysisResults({ result }: { result: AnalyzeResumeAgain
               <h4 className="font-semibold mb-4 text-lg">Personalized Learning Path</h4>
               <div className="space-y-4">
                 {result.learning_path.map((item, index) => (
-                  <Card key={index} className={cn('border-l-4', priorityStyles[item.priority])}>
+                  <Card key={index} className={cn('border-l-4', priorityStyles[item.priority as keyof typeof priorityStyles])}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -184,38 +206,43 @@ export default function AnalysisResults({ result }: { result: AnalyzeResumeAgain
           </>
         )}
 
-        {result.related_jobs && result.related_jobs.length > 0 && (
+        {(result.related_jobs || isLoadingRelatedJobs) && (
             <>
             <Separator />
             <div className="space-y-4">
                 <h4 className="font-semibold text-lg">Related Opportunities</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {result.related_jobs.map((job, index) => (
-                    <Card key={index} className="flex flex-col">
-                    <CardHeader>
-                        <CardTitle className="text-base font-semibold">{job.job_title}</CardTitle>
-                        <CardDescription className="flex items-center gap-1 text-xs">
-                        <Briefcase className="size-3" />
-                        {job.company}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-grow">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="size-3" />
-                        {job.location}
-                        </div>
-                    </CardContent>
-                    <CardFooter>
-                        <Button asChild variant="outline" size="sm" className="w-full">
-                        <a href={job.job_link} target="_blank" rel="noopener noreferrer">
-                            View
-                            <ArrowUpRight className="ml-1 size-3" />
-                        </a>
-                        </Button>
-                    </CardFooter>
-                    </Card>
-                ))}
-                </div>
+                {isLoadingRelatedJobs ? (
+                    <RelatedJobsLoadingSkeleton />
+                ) : (
+                    result.related_jobs && result.related_jobs.length > 0 &&
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {result.related_jobs.map((job, index) => (
+                            <Card key={index} className="flex flex-col">
+                            <CardHeader>
+                                <CardTitle className="text-base font-semibold">{job.job_title}</CardTitle>
+                                <CardDescription className="flex items-center gap-1 text-xs">
+                                <Briefcase className="size-3" />
+                                {job.company}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-grow">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <MapPin className="size-3" />
+                                {job.location}
+                                </div>
+                            </CardContent>
+                            <CardFooter>
+                                <Button asChild variant="outline" size="sm" className="w-full">
+                                <a href={job.job_link} target="_blank" rel="noopener noreferrer">
+                                    View
+                                    <ArrowUpRight className="ml-1 size-3" />
+                                </a>
+                                </Button>
+                            </CardFooter>
+                            </Card>
+                        ))}
+                    </div>
+                )}
             </div>
             </>
         )}

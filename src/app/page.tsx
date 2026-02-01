@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
-import { type AnalyzeResumeAgainstJobDescriptionOutput } from '@/ai/flows/ats-resume-analysis';
-import { runAnalysis } from '@/app/actions';
+import { runInitialAnalysis, findRelatedJobsAction } from '@/app/actions';
 import AnalysisForm from '@/components/analysis-form';
 import AnalysisResults from '@/components/analysis-results';
 import AnalysisLoading from '@/components/analysis-loading';
@@ -11,35 +10,56 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Lightbulb } from 'lucide-react';
 import type { FormSchema } from '@/components/analysis-form';
 import { useHistory } from '@/context/history-context';
+import type { AnalysisResult } from '@/lib/types';
 
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] =
-    useState<AnalyzeResumeAgainstJobDescriptionOutput | null>(null);
+    useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingRelatedJobs, setIsLoadingRelatedJobs] = useState(false);
   const { addHistoryItem } = useHistory();
 
   const handleAnalysis = async (data: FormSchema) => {
     setIsLoading(true);
     setAnalysisResult(null);
 
-    const result = await runAnalysis(data);
+    const initialResult = await runInitialAnalysis(data);
 
-    if (result.success && result.data) {
-      setAnalysisResult(result.data);
+    if (initialResult.success && initialResult.data) {
+      setAnalysisResult({ ...initialResult.data, related_jobs: [] });
       addHistoryItem({
-        job_title: result.data.job_title,
-        company: result.data.company,
+        job_title: initialResult.data.job_title,
+        company: initialResult.data.company,
       });
+      setIsLoading(false);
+      setIsLoadingRelatedJobs(true);
+
+      const relatedJobsResult = await findRelatedJobsAction({
+        targetJobTitle: data.targetJobTitle,
+        targetLocation: data.targetLocation,
+      });
+
+      if (relatedJobsResult.success && relatedJobsResult.data) {
+        setAnalysisResult(prev => ({ ...prev!, related_jobs: relatedJobsResult.data!.related_jobs }));
+      } else {
+        // Non-blocking toast
+        toast({
+          variant: 'destructive',
+          title: 'Could not load related jobs',
+          description: relatedJobsResult.error,
+        });
+      }
+      setIsLoadingRelatedJobs(false);
+
     } else {
       toast({
         variant: 'destructive',
         title: 'Analysis Failed',
-        description: result.error || 'An unexpected error occurred. Please try again.',
+        description: initialResult.error || 'An unexpected error occurred. Please try again.',
       });
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -53,7 +73,7 @@ export default function Home() {
           {isLoading ? (
             <AnalysisLoading />
           ) : analysisResult ? (
-            <AnalysisResults result={analysisResult} />
+            <AnalysisResults result={analysisResult} isLoadingRelatedJobs={isLoadingRelatedJobs} />
           ) : (
             <Card className="h-full">
               <CardHeader className="flex flex-row items-center gap-2">
