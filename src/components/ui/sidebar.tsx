@@ -262,7 +262,7 @@ Sidebar.displayName = "Sidebar"
 const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
+>(({ className, onClick, children, ...props }, ref) => {
   const { toggleSidebar } = useSidebar()
 
   return (
@@ -278,7 +278,7 @@ const SidebarTrigger = React.forwardRef<
       }}
       {...props}
     >
-      <PanelLeft />
+      {children || <PanelLeft />}
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
@@ -358,7 +358,7 @@ const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex h-12 items-center justify-between p-2", className)}
+      className={cn("flex h-12 items-center justify-between p-2 group-data-[state=collapsed]:justify-center", className)}
       {...props}
     />
   )

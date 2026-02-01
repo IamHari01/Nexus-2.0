@@ -21,6 +21,7 @@ import HistoryList from '@/components/history-list';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogOut } from 'lucide-react';
+import { NexusIcon } from '@/components/nexus-icon';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -53,10 +54,15 @@ export default function RootLayout({
         >
           <HistoryProvider>
             <SidebarProvider>
-              <Sidebar>
+              <Sidebar collapsible="icon">
                 <SidebarHeader>
-                  <Logo />
-                  <SidebarTrigger />
+                  <div className="group-data-[state=collapsed]:hidden">
+                    <Logo />
+                  </div>
+                  <SidebarTrigger className="group-data-[state=collapsed]:hidden" />
+                  <SidebarTrigger className="hidden group-data-[state=collapsed]:block">
+                    <NexusIcon className="h-6 w-6" />
+                  </SidebarTrigger>
                 </SidebarHeader>
                 <SidebarContent>
                   <HistoryList />
