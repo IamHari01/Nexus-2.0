@@ -56,17 +56,82 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [jobDescriptionFileName, setJobDescriptionFileName] = useState<string | null>(null);
 
-  const handleFileChange = (
+  const handleClearFile = (fieldName: 'resumeText' | 'jobDescription') => {
+    form.setValue(fieldName, '', { shouldValidate: true });
+    if (fieldName === 'resumeText') {
+      setResumeFileName(null);
+    } else {
+      setJobDescriptionFileName(null);
+    }
+  };
+
+  const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
     fieldName: 'resumeText' | 'jobDescription'
   ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (fieldName === 'resumeText') {
-        setResumeFileName(file.name);
-      } else {
-        setJobDescriptionFileName(file.name);
-      }
+    if (!file) {
+      if (event.target) event.target.value = '';
+      return;
+    }
+
+    if (fieldName === 'resumeText') {
+      setResumeFileName(file.name);
+    } else {
+      setJobDescriptionFileName(file.name);
+    }
+
+    if (file.type === 'application/pdf') {
+      const reader = new FileReader();
+
+      reader.onload = async (e) => {
+        const data = e.target?.result;
+        if (data instanceof ArrayBuffer) {
+          try {
+            // Dynamically import pdfjs
+            const pdfjs = await import('pdfjs-dist');
+            
+            // Set worker source from CDN. This is crucial for Next.js.
+            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+            const pdf = await pdfjs.getDocument({ data }).promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              // The items are of type TextItem, which has a `str` property
+              const pageText = textContent.items.map(item => 'str' in item ? item.str : '').join(' ');
+              fullText += pageText + '\n';
+            }
+            form.setValue(fieldName, fullText, { shouldValidate: true });
+            toast({
+              title: 'PDF Content Loaded',
+              description: `Successfully extracted text from ${file.name}.`,
+            });
+          } catch (error) {
+            console.error("Error parsing PDF: ", error);
+            toast({
+              variant: 'destructive',
+              title: 'PDF Parse Error',
+              description: 'Could not extract text from the PDF.',
+            });
+            handleClearFile(fieldName);
+          }
+        }
+      };
+
+      reader.onerror = () => {
+        toast({
+          variant: 'destructive',
+          title: 'File Read Error',
+          description: 'There was an error reading the PDF file.',
+        });
+        handleClearFile(fieldName);
+      };
+
+      reader.readAsArrayBuffer(file);
+
+    } else if (file.type === 'text/plain' || file.type === 'text/markdown') {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
@@ -82,21 +147,21 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
           title: 'File Read Error',
           description: 'There was an error reading the file.',
         });
+        handleClearFile(fieldName);
       };
       reader.readAsText(file, 'UTF-8');
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Unsupported File Type',
+            description: 'Please upload a .pdf, .txt, or .md file.',
+        });
+        handleClearFile(fieldName);
     }
+
     // Reset file input value to allow re-uploading the same file
     if (event.target) {
       event.target.value = '';
-    }
-  };
-
-  const handleClearFile = (fieldName: 'resumeText' | 'jobDescription') => {
-    form.setValue(fieldName, '', { shouldValidate: true });
-    if (fieldName === 'resumeText') {
-      setResumeFileName(null);
-    } else {
-      setJobDescriptionFileName(null);
     }
   };
 
@@ -181,7 +246,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                       id="resume-upload"
                       type="file"
                       className="hidden"
-                      accept=".txt,.md"
+                      accept=".txt,.md,.pdf"
                       onChange={(e) => handleFileChange(e, 'resumeText')}
                     />
                   </div>
@@ -232,7 +297,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                       id="jd-upload"
                       type="file"
                       className="hidden"
-                      accept=".txt,.md"
+                      accept=".txt,.md,.pdf"
                       onChange={(e) => handleFileChange(e, 'jobDescription')}
                     />
                   </div>
