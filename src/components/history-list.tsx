@@ -6,24 +6,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { FilePlus2, History as HistoryIcon } from 'lucide-react';
+import { History as HistoryIcon } from 'lucide-react';
 
 export default function HistoryList() {
   const { history } = useHistory();
 
   return (
     <>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild tooltip="New Analysis">
-            <a href="/">
-              <FilePlus2 />
-              <span>New Analysis</span>
-            </a>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-
       <SidebarMenu>
           {history.length > 0 ? (
             history.map((item) => (
