@@ -91,8 +91,11 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
             // Dynamically import pdfjs
             const pdfjs = await import('pdfjs-dist');
             
-            // Set worker source from CDN, using the version from the loaded library to avoid mismatches.
-            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+            // Set worker source using a method compatible with modern bundlers like Turbopack/Webpack
+            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+              'pdfjs-dist/build/pdf.worker.min.mjs',
+              import.meta.url
+            ).toString();
 
             const pdf = await pdfjs.getDocument({ data }).promise;
             let fullText = '';
