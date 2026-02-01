@@ -184,6 +184,42 @@ export default function AnalysisResults({ result }: { result: AnalyzeResumeAgain
           </>
         )}
 
+        {result.related_jobs && result.related_jobs.length > 0 && (
+            <>
+            <Separator />
+            <div className="space-y-4">
+                <h4 className="font-semibold text-lg">Related Opportunities</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {result.related_jobs.map((job, index) => (
+                    <Card key={index} className="flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="text-base font-semibold">{job.job_title}</CardTitle>
+                        <CardDescription className="flex items-center gap-1 text-xs">
+                        <Briefcase className="size-3" />
+                        {job.company}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-grow">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="size-3" />
+                        {job.location}
+                        </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Button asChild variant="outline" size="sm" className="w-full">
+                        <a href={job.job_link} target="_blank" rel="noopener noreferrer">
+                            View
+                            <ArrowUpRight className="ml-1 size-3" />
+                        </a>
+                        </Button>
+                    </CardFooter>
+                    </Card>
+                ))}
+                </div>
+            </div>
+            </>
+        )}
+
       </CardContent>
       <CardFooter>
         <Button asChild className="w-full bg-accent hover:bg-accent/90">

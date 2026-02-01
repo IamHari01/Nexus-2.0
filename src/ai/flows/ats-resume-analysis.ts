@@ -12,7 +12,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const AnalyzeResumeAgainstJobDescriptionInputSchema = z.object({
-  resumeText: z.string().describe('The text content of the candidate\'s resume.'),
+  resumeText: z.string().describe("The text content of the candidate's resume."),
   jobDescription: z.string().describe('The job description to compare the resume against.'),
   targetJobTitle: z.string().describe('The target job title for the candidate.'),
   targetLocation: z.string().describe('The target location for the job.'),
@@ -24,6 +24,13 @@ const AnalyzeResumeAgainstJobDescriptionInputSchema = z.object({
 export type AnalyzeResumeAgainstJobDescriptionInput = z.infer<
   typeof AnalyzeResumeAgainstJobDescriptionInputSchema
 >;
+
+const RelatedJobSchema = z.object({
+  job_title: z.string().describe('The title of the related job.'),
+  company: z.string().describe('The company offering the related job.'),
+  location: z.string().describe('The location of the related job.'),
+  job_link: z.string().url().describe('URL to the related job listing.'),
+});
 
 const AnalyzeResumeAgainstJobDescriptionOutputSchema = z.object({
   job_id: z.string().describe('Unique identifier for the job listing.'),
@@ -51,6 +58,11 @@ const AnalyzeResumeAgainstJobDescriptionOutputSchema = z.object({
     )
     .describe('Recommended learning path to bridge the skill gaps.'),
   job_link: z.string().url().describe('URL to the job listing.'),
+  related_jobs: z
+    .array(RelatedJobSchema)
+    .describe(
+      'A list of at least four related job opportunities based on the target job title and location. These should be realistic but can be fictional.'
+    ),
 });
 export type AnalyzeResumeAgainstJobDescriptionOutput = z.infer<
   typeof AnalyzeResumeAgainstJobDescriptionOutputSchema
@@ -89,6 +101,7 @@ const prompt = ai.definePrompt({
   \t*   Classify gaps into Hard Skills, Experience Gaps, and Tooling/Workflow gaps.
   \t*   Explain why the candidate was rejected (if score < 85).
   3.  Learning Pathfinder Agent: Generate a job-specific learning path. Recommend YouTube channels/playlists, docs, and mini-projects. Optimize for shortlisting, not theory. Prefer hands-on content and 2024-2026 material.
+  4.  Related Jobs Agent: Generate a list of at least four other realistic (but can be fictional) job opportunities based on the target job title and location. Provide a title, company, location, and a fictional application link for each.
 
   Output Format (Strict JSON):
   \t*   Ensure the output is a valid JSON object matching the schema.
@@ -97,12 +110,13 @@ const prompt = ai.definePrompt({
   \t*   job_title: A string.
   \t*   location: A string.
   \t*   shortlist_probability: An integer between 0 and 99.
-  \t*   match_status: \"High\", \"Medium\", or \"Low\".
+  \t*   match_status: "High", "Medium", or "Low".
   \t*   reasoning: A 1-2 sentence ATS-style explanation.
   \t*   matched_skills: An array of strings.
   \t*   missing_skills: An array of strings.
   \t*   learning_path: An array of learning resources with skill, priority, youtube_query, and estimated_time.
   \t*   job_link: A valid URL.
+  \t*   related_jobs: An array of at least four job objects with job_title, company, location, and job_link.
 
   Behavioral Rules:
   \t*   Never inflate skills or encourage mass applications.
@@ -120,24 +134,38 @@ const prompt = ai.definePrompt({
 
   Example Output:
   {
-  \"job_id\": \"12345\",
-  \"company\": \"Acme Corp\",
-  \"job_title\": \"Software Engineer\",
-  \"location\": \"San Francisco\",
-  \"shortlist_probability\": 87,
-  \"match_status\": \"High\",
-  \"reasoning\": \"The candidate demonstrates strong Python skills and experience with relevant projects.\",
-  \"matched_skills\": [\"Python\", \"SQL\"],
-  \"missing_skills\": [\"Docker\", \"CI/CD\"],
-  \"learning_path\": [
-  {
-  \"skill\": \"Docker\",
-  \"priority\": \"Critical\",
-  \"youtube_query\": \"Docker for backend developers full course\",
-  \"estimated_time\": \"8-10 hours\"
-  }
-  ],
-  \"job_link\": \"https://example.com/jobs/12345\"
+    "job_id": "12345",
+    "company": "Acme Corp",
+    "job_title": "Software Engineer",
+    "location": "San Francisco",
+    "shortlist_probability": 87,
+    "match_status": "High",
+    "reasoning": "The candidate demonstrates strong Python skills and experience with relevant projects.",
+    "matched_skills": ["Python", "SQL"],
+    "missing_skills": ["Docker", "CI/CD"],
+    "learning_path": [
+      {
+        "skill": "Docker",
+        "priority": "Critical",
+        "youtube_query": "Docker for backend developers full course",
+        "estimated_time": "8-10 hours"
+      }
+    ],
+    "job_link": "https://example.com/jobs/12345",
+    "related_jobs": [
+      {
+        "job_title": "Backend Engineer",
+        "company": "Innovate Inc.",
+        "location": "San Francisco",
+        "job_link": "https://example.com/jobs/67890"
+      },
+      {
+        "job_title": "Full Stack Developer",
+        "company": "Tech Solutions",
+        "location": "San Francisco",
+        "job_link": "https://example.com/jobs/11223"
+      }
+    ]
   }
   `,
 });
