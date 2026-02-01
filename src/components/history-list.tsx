@@ -26,7 +26,7 @@ export default function HistoryList() {
               </SidebarMenuItem>
             ))
           ) : (
-             <div className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+             <div className="p-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                 <p>No history yet.</p>
             </div>
           )}
