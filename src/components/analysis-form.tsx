@@ -89,10 +89,10 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         if (data instanceof ArrayBuffer) {
           try {
             // Dynamically import pdfjs
-            const pdfjs = await import('pdfjs-dist');
+            const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
             
             // Set worker source from CDN. This is crucial for Next.js.
-            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@4.4.170/build/pdf.worker.min.mjs`;
 
             const pdf = await pdfjs.getDocument({ data }).promise;
             let fullText = '';
