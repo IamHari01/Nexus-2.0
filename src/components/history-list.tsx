@@ -7,6 +7,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { History as HistoryIcon } from 'lucide-react';
+import Link from 'next/link';
 
 export default function HistoryList() {
   const { history } = useHistory();
@@ -18,15 +19,15 @@ export default function HistoryList() {
             history.map((item) => (
               <SidebarMenuItem key={item.id}>
                 <SidebarMenuButton asChild variant="ghost" size="sm" tooltip={item.job_title}>
-                  <a href="#">
+                  <Link href={`/analysis/${item.id}`}>
                     <HistoryIcon />
                     <span className="truncate">{item.job_title}</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))
           ) : (
-             <div className="p-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+             <div className="mt-4 p-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                 <p>No history yet.</p>
             </div>
           )}

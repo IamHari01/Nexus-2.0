@@ -1,16 +1,18 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type { AnalysisResult } from '@/lib/types';
 
 export interface HistoryItem {
   id: string;
   job_title: string;
   company: string;
+  result: AnalysisResult;
 }
 
 interface HistoryContextType {
   history: HistoryItem[];
-  addHistoryItem: (item: Omit<HistoryItem, 'id'>) => void;
+  addHistoryItem: (result: AnalysisResult) => string;
 }
 
 const HistoryContext = createContext<HistoryContextType | undefined>(undefined);
@@ -18,12 +20,19 @@ const HistoryContext = createContext<HistoryContextType | undefined>(undefined);
 export const HistoryProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
-  const addHistoryItem = (item: Omit<HistoryItem, 'id'>) => {
-    const newHistoryItem = { ...item, id: new Date().toISOString() };
-    // Avoid adding duplicates
-    if (!history.some(h => h.job_title === newHistoryItem.job_title && h.company === newHistoryItem.company)) {
-        setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 10)); // Keep last 10
-    }
+  const addHistoryItem = (result: AnalysisResult) => {
+    const newHistoryItem: HistoryItem = {
+      id: `analysis-${Date.now()}`,
+      job_title: result.job_title,
+      company: result.company,
+      result: result,
+    };
+    
+    setHistory(prevHistory => {
+      const newHistory = [newHistoryItem, ...prevHistory.filter(h => h.id !== newHistoryItem.id)].slice(0, 10);
+      return newHistory;
+    });
+    return newHistoryItem.id;
   };
 
   return (
