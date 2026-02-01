@@ -12,7 +12,6 @@ import {
   XCircle,
   Lightbulb,
   ArrowUpRight,
-  BookOpen,
   Clock,
   Youtube
 } from 'lucide-react';
@@ -28,13 +27,6 @@ import type { AnalysisResult } from '@/lib/types';
 
 
 function ProbabilityScore({ score }: { score: number }) {
-  const getScoreColorClasses = (s: number): { ring: string; text: string; bg: string; fill: string } => {
-    if (s >= 85) return { ring: 'stroke-chart-2', text: 'text-chart-2', bg: 'bg-chart-2/10', fill: 'fill-chart-2' };
-    if (s >= 60) return { ring: 'stroke-chart-4', text: 'text-chart-4', bg: 'bg-chart-4/10', fill: 'fill-chart-4' };
-    return { ring: 'stroke-chart-1', text: 'text-chart-1', bg: 'bg-chart-1/10', fill: 'fill-chart-1' };
-  };
-
-  const colorClasses = getScoreColorClasses(score);
   const circumference = 2 * Math.PI * 56; // r=56
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
@@ -50,7 +42,7 @@ function ProbabilityScore({ score }: { score: number }) {
           cy="60"
         />
         <circle
-          className={cn('transform -rotate-90 origin-center transition-all duration-1000 ease-out', colorClasses.ring)}
+          className={cn('transform -rotate-90 origin-center transition-all duration-1000 ease-out', 'stroke-primary')}
           strokeWidth="8"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
@@ -61,7 +53,7 @@ function ProbabilityScore({ score }: { score: number }) {
           cy="60"
         />
       </svg>
-      <div className={cn("absolute inset-0 flex items-center justify-center font-bold", colorClasses.text)}>
+      <div className={cn("absolute inset-0 flex items-center justify-center font-bold", 'text-primary')}>
         <span className="text-4xl">{score}</span>
         <span className="text-lg">%</span>
       </div>
@@ -71,11 +63,11 @@ function ProbabilityScore({ score }: { score: number }) {
 
 function MatchBadge({ status }: { status: 'High' | 'Medium' | 'Low' }) {
     const statusStyles = {
-        High: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-600/60',
-        Medium: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-600/60',
-        Low: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-600/60',
+        High: 'bg-primary/10 text-primary border-primary/20',
+        Medium: 'bg-secondary text-secondary-foreground border-border',
+        Low: 'bg-destructive/10 text-destructive border-destructive/20',
     };
-    return <Badge className={cn('text-sm', statusStyles[status])}>{status} Match</Badge>
+    return <Badge className={cn('text-sm border', statusStyles[status])}>{status} Match</Badge>
 }
 
 function RelatedJobsLoadingSkeleton() {
@@ -101,11 +93,11 @@ function RelatedJobsLoadingSkeleton() {
 
 export default function AnalysisResults({ result, isLoadingRelatedJobs }: { result: AnalysisResult, isLoadingRelatedJobs?: boolean }) {
   
-  const priorityStyles = {
-    Critical: 'border-red-500/50 bg-red-500/5',
-    High: 'border-orange-500/50 bg-orange-500/5',
-    Medium: 'border-yellow-500/50 bg-yellow-500/5',
-    Low: 'border-blue-500/50 bg-blue-500/5',
+  const priorityStyles: { [key: string]: string } = {
+    Critical: 'border-destructive/50 bg-destructive/5',
+    High: 'border-primary/20 bg-primary/5',
+    Medium: 'border-secondary-foreground/20 bg-secondary/20',
+    Low: 'border-muted-foreground/20 bg-muted/20',
   }
 
   return (
@@ -144,10 +136,10 @@ export default function AnalysisResults({ result, isLoadingRelatedJobs }: { resu
           <h4 className="font-semibold mb-4 text-lg">Skills Analysis</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <h5 className="flex items-center gap-2 font-medium"><CheckCircle2 className="h-5 w-5 text-green-500"/>Matched Skills</h5>
+              <h5 className="flex items-center gap-2 font-medium"><CheckCircle2 className="h-5 w-5 text-primary"/>Matched Skills</h5>
               <div className="flex flex-wrap gap-2">
                 {result.matched_skills.map((skill) => (
-                  <Badge key={skill} variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-300">
+                  <Badge key={skill} variant="secondary">
                     {skill}
                   </Badge>
                 ))}
@@ -155,10 +147,10 @@ export default function AnalysisResults({ result, isLoadingRelatedJobs }: { resu
               </div>
             </div>
             <div className="space-y-3">
-              <h5 className="flex items-center gap-2 font-medium"><XCircle className="h-5 w-5 text-red-500"/>Missing Skills</h5>
+              <h5 className="flex items-center gap-2 font-medium"><XCircle className="h-5 w-5 text-destructive"/>Missing Skills</h5>
               <div className="flex flex-wrap gap-2">
                 {result.missing_skills.map((skill) => (
-                  <Badge key={skill} variant="outline" className="border-red-500/50 text-red-700 dark:text-red-400">
+                  <Badge key={skill} variant="destructive">
                     {skill}
                   </Badge>
                 ))}
@@ -175,7 +167,7 @@ export default function AnalysisResults({ result, isLoadingRelatedJobs }: { resu
               <h4 className="font-semibold mb-4 text-lg">Personalized Learning Path</h4>
               <div className="space-y-4">
                 {result.learning_path.map((item, index) => (
-                  <Card key={index} className={cn('border-l-4', priorityStyles[item.priority as keyof typeof priorityStyles])}>
+                  <Card key={index} className={cn('border-l-4', priorityStyles[item.priority] || 'border-muted')}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -189,7 +181,7 @@ export default function AnalysisResults({ result, isLoadingRelatedJobs }: { resu
                           <TooltipTrigger asChild>
                             <Button variant="ghost" size="icon" asChild>
                               <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.youtube_query)}`} target="_blank" rel="noopener noreferrer">
-                                <Youtube className="h-5 w-5 text-red-600" />
+                                <Youtube className="h-5 w-5 text-destructive" />
                               </a>
                             </Button>
                           </TooltipTrigger>
@@ -249,7 +241,7 @@ export default function AnalysisResults({ result, isLoadingRelatedJobs }: { resu
 
       </CardContent>
       <CardFooter>
-        <Button asChild className="w-full bg-accent hover:bg-accent/90">
+        <Button asChild className="w-full">
             <a href={result.job_link} target="_blank" rel="noopener noreferrer">
                 Apply Now <ArrowUpRight className="ml-2 h-4 w-4" />
             </a>
