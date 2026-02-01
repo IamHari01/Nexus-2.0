@@ -21,7 +21,7 @@ import HistoryList from '@/components/history-list';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'NexusTalent AI | Real-Time Career Intelligence',
+  title: 'NEXUS',
   description: 'Maximize your shortlisting probability with AI-driven resume analysis and personalized learning paths.',
 };
 
