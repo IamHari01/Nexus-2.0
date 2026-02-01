@@ -11,9 +11,16 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { HistoryProvider } from '@/context/history-context';
 import HistoryList from '@/components/history-list';
+import { ThemeProvider } from '@/components/theme-provider';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LogOut } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -28,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -38,25 +45,43 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('min-h-screen bg-background font-body antialiased', inter.variable)} suppressHydrationWarning>
-        <HistoryProvider>
-          <SidebarProvider>
-            <Sidebar collapsible="icon">
-              <SidebarHeader>
-                <a href="/" aria-label="Home">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <HistoryProvider>
+            <SidebarProvider>
+              <Sidebar>
+                <SidebarHeader>
                   <Logo />
-                </a>
-                <SidebarTrigger />
-              </SidebarHeader>
-              <SidebarContent>
-                <HistoryList />
-              </SidebarContent>
-            </Sidebar>
-            <SidebarInset>
-              <main className="flex-1">{children}</main>
-            </SidebarInset>
-            <Toaster />
-          </SidebarProvider>
-        </HistoryProvider>
+                  <SidebarTrigger />
+                </SidebarHeader>
+                <SidebarContent>
+                  <HistoryList />
+                </SidebarContent>
+                <SidebarFooter>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <ThemeToggle />
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton variant="ghost">
+                        <LogOut />
+                        <span>Logout</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarFooter>
+              </Sidebar>
+              <SidebarInset>
+                <main className="flex-1">{children}</main>
+              </SidebarInset>
+              <Toaster />
+            </SidebarProvider>
+          </HistoryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
