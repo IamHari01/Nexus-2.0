@@ -22,9 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, Upload, File, X } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
-import React, { useState } from 'react';
+import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles } from 'lucide-react';
 
 const formSchema = z.object({
   resumeText: z.string().min(100, 'Resume text must be at least 100 characters.'),
@@ -52,119 +50,6 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
       careerLevel: 'Junior',
     },
   });
-
-  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
-  const [jobDescriptionFileName, setJobDescriptionFileName] = useState<string | null>(null);
-
-  const handleClearFile = (fieldName: 'resumeText' | 'jobDescription') => {
-    form.setValue(fieldName, '', { shouldValidate: true });
-    if (fieldName === 'resumeText') {
-      setResumeFileName(null);
-    } else {
-      setJobDescriptionFileName(null);
-    }
-  };
-
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    fieldName: 'resumeText' | 'jobDescription'
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      if (event.target) event.target.value = '';
-      return;
-    }
-
-    if (fieldName === 'resumeText') {
-      setResumeFileName(file.name);
-    } else {
-      setJobDescriptionFileName(file.name);
-    }
-
-    if (file.type === 'application/pdf') {
-      const reader = new FileReader();
-
-      reader.onload = async (e) => {
-        const data = e.target?.result;
-        if (data instanceof ArrayBuffer) {
-          try {
-            // Dynamically import necessary parts of pdfjs-dist
-            const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
-            
-            // Use a CDN to load the worker, pinning the version for stability.
-            GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.170/pdf.worker.min.mjs`;
-
-            const pdf = await getDocument({ data }).promise;
-            let fullText = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-              const page = await pdf.getPage(i);
-              const textContent = await page.getTextContent();
-              // The items are of type TextItem, which has a `str` property
-              const pageText = textContent.items.map(item => 'str' in item ? item.str : '').join(' ');
-              fullText += pageText + '\n';
-            }
-            form.setValue(fieldName, fullText, { shouldValidate: true });
-            toast({
-              title: 'PDF Content Loaded',
-              description: `Successfully extracted text from ${file.name}.`,
-            });
-          } catch (error) {
-            console.error("Error parsing PDF: ", error);
-            toast({
-              variant: 'destructive',
-              title: 'PDF Parse Error',
-              description: 'Could not extract text from the PDF.',
-            });
-            handleClearFile(fieldName);
-          }
-        }
-      };
-
-      reader.onerror = () => {
-        toast({
-          variant: 'destructive',
-          title: 'File Read Error',
-          description: 'There was an error reading the PDF file.',
-        });
-        handleClearFile(fieldName);
-      };
-
-      reader.readAsArrayBuffer(file);
-
-    } else if (file.type === 'text/plain' || file.type === 'text/markdown') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        form.setValue(fieldName, text, { shouldValidate: true });
-        toast({
-          title: 'File Content Loaded',
-          description: `Successfully loaded content from ${file.name}.`,
-        });
-      };
-      reader.onerror = () => {
-        toast({
-          variant: 'destructive',
-          title: 'File Read Error',
-          description: 'There was an error reading the file.',
-        });
-        handleClearFile(fieldName);
-      };
-      reader.readAsText(file, 'UTF-8');
-    } else {
-        toast({
-            variant: 'destructive',
-            title: 'Unsupported File Type',
-            description: 'Please upload a .pdf, .txt, or .md file.',
-        });
-        handleClearFile(fieldName);
-    }
-
-    // Reset file input value to allow re-uploading the same file
-    if (event.target) {
-      event.target.value = '';
-    }
-  };
-
 
   return (
     <Card>
@@ -234,47 +119,13 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
               name="resumeText"
               render={({ field }) => (
                 <FormItem>
-                   <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
-                    <Button variant="ghost" size="icon" asChild>
-                      <label htmlFor="resume-upload" className="cursor-pointer">
-                        <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground" />
-                        <span className="sr-only">Upload Resume</span>
-                      </label>
-                    </Button>
-                    <Input
-                      id="resume-upload"
-                      type="file"
-                      className="hidden"
-                      accept=".txt,.md,.pdf"
-                      onChange={(e) => handleFileChange(e, 'resumeText')}
-                    />
-                  </div>
                   <FormControl>
-                    {resumeFileName ? (
-                      <div className="flex min-h-[150px] items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <File className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{resumeFileName}</span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleClearFile('resumeText')}
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="sr-only">Clear file</span>
-                        </Button>
-                      </div>
-                    ) : (
                     <Textarea
-                      placeholder="Paste the full text of your resume here, or upload a file."
+                      placeholder="Paste the full text of your resume here."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
-                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -285,47 +136,13 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
               name="jobDescription"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Job Description</FormLabel>
-                     <Button variant="ghost" size="icon" asChild>
-                      <label htmlFor="jd-upload" className="cursor-pointer">
-                        <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground" />
-                        <span className="sr-only">Upload Job Description</span>
-                      </label>
-                    </Button>
-                    <Input
-                      id="jd-upload"
-                      type="file"
-                      className="hidden"
-                      accept=".txt,.md,.pdf"
-                      onChange={(e) => handleFileChange(e, 'jobDescription')}
-                    />
-                  </div>
                   <FormControl>
-                  {jobDescriptionFileName ? (
-                      <div className="flex min-h-[150px] items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <File className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{jobDescriptionFileName}</span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleClearFile('jobDescription')}
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="sr-only">Clear file</span>
-                        </Button>
-                      </div>
-                    ) : (
                     <Textarea
-                      placeholder="Paste the full job description text here, or upload a file."
+                      placeholder="Paste the full job description text here."
                       className="min-h-[150px] resize-y"
                       {...field}
                     />
-                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
