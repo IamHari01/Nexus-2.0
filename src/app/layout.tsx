@@ -76,7 +76,7 @@ export default function RootLayout({
                 </SidebarFooter>
               </Sidebar>
               <SidebarInset>
-                <header className="flex h-12 shrink-0 items-center border-b px-6">
+                <header className="flex h-12 shrink-0 items-center px-6">
                   <h1 className="text-2xl font-bold text-foreground">NEXUS</h1>
                 </header>
                 <main className="flex-1 overflow-y-auto">{children}</main>
