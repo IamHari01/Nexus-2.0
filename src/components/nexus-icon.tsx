@@ -10,9 +10,11 @@ export default function NexusIcon({ className }: { className?: string }) {
       strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("h-6 w-6", className)}
+      className={cn("h-7 w-7", className)}
     >
-      <path d="M7 20V4M7 4l10 16M17 20V4" />
+      <path d="M7 20V4" />
+      <path d="M7 4l10 16" />
+      <path d="M17 20V4" />
     </svg>
   );
 }
