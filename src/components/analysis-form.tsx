@@ -88,13 +88,13 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         const data = e.target?.result;
         if (data instanceof ArrayBuffer) {
           try {
-            // Dynamically import pdfjs
-            const pdfjs = await import('pdfjs-dist');
+            // Dynamically import necessary parts of pdfjs-dist
+            const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
             
-            // Use a CDN to load the worker to improve performance and stability
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+            // Use a CDN to load the worker, pinning the version for stability.
+            GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.170/pdf.worker.min.mjs`;
 
-            const pdf = await pdfjs.getDocument({ data }).promise;
+            const pdf = await getDocument({ data }).promise;
             let fullText = '';
             for (let i = 1; i <= pdf.numPages; i++) {
               const page = await pdf.getPage(i);
