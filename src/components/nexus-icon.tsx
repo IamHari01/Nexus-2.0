@@ -14,8 +14,10 @@ export const NexusIcon = ({
       className={cn('h-6 w-6', className)}
       {...props}
     >
-      <path d="M15.226 21.0001H19.226L12.026 3.00006H8.02601L15.226 21.0001Z" fill="currentColor" fillOpacity="0.6"/>
-      <path d="M8.82599 21.0001H4.82599L12.026 3.00006H16.026L8.82599 21.0001Z" fill="currentColor"/>
+      <path
+        d="M6 4V20H8V7.23L16.5 20H18V4H16V16.77L7.5 4H6Z"
+        fill="currentColor"
+      />
     </svg>
   );
 };
