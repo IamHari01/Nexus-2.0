@@ -1,8 +1,10 @@
 'use client';
 
+import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import * as pdfjsLib from 'pdfjs-dist';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -22,10 +24,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles } from 'lucide-react';
+import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, FileUp, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+// Setup PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 const formSchema = z.object({
-  resumeText: z.string().min(100, 'Resume text must be at least 100 characters.'),
+  resumeText: z.string().min(100, 'Resume text must be at least 100 characters. You can upload a PDF or TXT file.'),
   jobDescription: z.string().min(100, 'Job description must be at least 100 characters.'),
   targetJobTitle: z.string().min(2, 'Job title is required.'),
   targetLocation: z.string().min(2, 'Location is required.'),
@@ -40,6 +46,10 @@ interface AnalysisFormProps {
 }
 
 export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps) {
+  const [fileName, setFileName] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -50,6 +60,60 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
       careerLevel: 'Junior',
     },
   });
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    form.setValue('resumeText', '', { shouldValidate: false });
+    setFileName(null);
+
+    if (file.type === 'application/pdf') {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map(item => (typeof item === 'object' && 'str' in item ? item.str : '')).join(' ') + '\n';
+        }
+        form.setValue('resumeText', fullText, { shouldValidate: true });
+        setFileName(file.name);
+      } catch (error) {
+        console.error('Error parsing PDF:', error);
+        toast({
+          variant: 'destructive',
+          title: 'PDF Parsing Error',
+          description: 'Could not extract text from the PDF. Please ensure it is a valid and text-based PDF.',
+        });
+      }
+    } else if (file.type === 'text/plain') {
+      const text = await file.text();
+      form.setValue('resumeText', text, { shouldValidate: true });
+      setFileName(file.name);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Unsupported File Type',
+        description: 'Please upload a PDF or TXT file.',
+      });
+    }
+
+    // Reset the file input so the user can upload the same file again
+    if(event.target){
+        event.target.value = '';
+    }
+  };
+  
+  const handleClearFile = () => {
+    form.setValue('resumeText', '', { shouldValidate: true });
+    setFileName(null);
+    if(fileInputRef.current){
+        fileInputRef.current.value = '';
+    }
+  }
+
 
   return (
     <Card>
@@ -120,13 +184,41 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
               render={({ field }) => (
                 <FormItem>
                     <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Paste the full text of your resume here."
-                      className="min-h-[150px] resize-y"
-                      {...field}
-                    />
-                  </FormControl>
+                    <FormControl>
+                        <>
+                            <input
+                                type="file"
+                                className="hidden"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                accept=".pdf,.txt"
+                            />
+                            {!fileName ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <FileUp className="mr-2 h-4 w-4" />
+                                    Upload Resume (PDF or TXT)
+                                </Button>
+                            ) : (
+                                <div className="flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                    <span className="truncate">{fileName}</span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 shrink-0"
+                                        onClick={handleClearFile}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
+                        </>
+                    </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
