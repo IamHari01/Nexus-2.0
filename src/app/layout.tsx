@@ -26,7 +26,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'NEXUS',
-  description: 'Maximize your shortlisting probability with AI-driven resume analysis and personalized learning paths.',
+  description: 'Maximize your shortlisting probability with AI-driven resume analysis.',
 };
 
 export default function RootLayout({
@@ -76,7 +76,10 @@ export default function RootLayout({
                 </SidebarFooter>
               </Sidebar>
               <SidebarInset>
-                <main className="flex-1">{children}</main>
+                <header className="flex h-12 shrink-0 items-center border-b px-6">
+                  <h1 className="text-2xl font-bold text-foreground">NEXUS</h1>
+                </header>
+                <main className="flex-1 overflow-y-auto">{children}</main>
               </SidebarInset>
               <Toaster />
             </SidebarProvider>
