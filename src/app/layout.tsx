@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
-import { Logo } from '@/components/logo';
 import {
   Sidebar,
   SidebarContent,
@@ -21,7 +20,6 @@ import HistoryList from '@/components/history-list';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogOut } from 'lucide-react';
-import { NexusIcon } from '@/components/nexus-icon';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -56,13 +54,10 @@ export default function RootLayout({
             <SidebarProvider>
               <Sidebar collapsible="icon">
                 <SidebarHeader>
-                  <div className="group-data-[state=collapsed]:hidden">
-                    <Logo />
-                  </div>
-                  <SidebarTrigger className="group-data-[state=collapsed]:hidden" />
-                  <SidebarTrigger className="hidden group-data-[state=collapsed]:block">
-                    <NexusIcon className="h-6 w-6" />
-                  </SidebarTrigger>
+                  <span className="text-xl font-semibold text-foreground group-data-[state=collapsed]:hidden">
+                    NEXUS
+                  </span>
+                  <SidebarTrigger />
                 </SidebarHeader>
                 <SidebarContent>
                   <HistoryList />
@@ -82,9 +77,6 @@ export default function RootLayout({
                 </SidebarFooter>
               </Sidebar>
               <SidebarInset>
-                <header className="flex h-12 items-center gap-4 border-b bg-background px-4 md:px-6">
-                    <h1 className="text-xl font-semibold text-foreground">NEXUS</h1>
-                </header>
                 <main className="flex-1">{children}</main>
               </SidebarInset>
               <Toaster />
