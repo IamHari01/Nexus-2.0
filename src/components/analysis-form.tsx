@@ -27,8 +27,7 @@ import {
 import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, FileUp, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-// Setup PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+// Setup PDF.js worker will be done in useEffect
 
 const formSchema = z.object({
   resumeText: z.string().min(1, 'Resume is required. You can upload a PDF or TXT file.'),
@@ -49,6 +48,14 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
   const [fileName, setFileName] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  
+  React.useEffect(() => {
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+    } catch (error) {
+      console.error('Failed to set PDF.js worker source:', error);
+    }
+  }, []);
 
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
