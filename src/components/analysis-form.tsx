@@ -4,7 +4,6 @@ import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import * as pdfjsLib from 'pdfjs-dist';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -27,8 +26,6 @@ import {
 import { Briefcase, FileText, Loader2, Target, MapPin, GraduationCap, Sparkles, FileUp, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-// Setup PDF.js worker will be done in useEffect
-
 const formSchema = z.object({
   resumeText: z.string().min(1, 'Resume is required. You can upload a PDF or TXT file.'),
   jobDescription: z.string().min(100, 'Job description must be at least 100 characters.'),
@@ -46,16 +43,9 @@ interface AnalysisFormProps {
 
 export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps) {
   const [fileName, setFileName] = React.useState<string | null>(null);
+  const [isParsing, setIsParsing] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  
-  React.useEffect(() => {
-    try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-    } catch (error) {
-      console.error('Failed to set PDF.js worker source:', error);
-    }
-  }, []);
 
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
@@ -72,11 +62,17 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsParsing(true);
     form.setValue('resumeText', '', { shouldValidate: false });
     setFileName(null);
 
     if (file.type === 'application/pdf') {
       try {
+        // Dynamically import PDF.js ONLY in the client-side event handler
+        const pdfjsLib = await import('pdfjs-dist');
+        // Set worker source dynamically
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         let fullText = '';
@@ -107,7 +103,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
       });
     }
 
-    // Reset the file input so the user can upload the same file again
+    setIsParsing(false);
     if(event.target){
         event.target.value = '';
     }
@@ -121,9 +117,8 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
     }
   }
 
-
   return (
-    <Card>
+    <Card className="border-border">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-primary" />
@@ -141,7 +136,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                   <FormItem>
                     <FormLabel className="flex items-center gap-2"><Target className="h-4 w-4" />Target Job Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Software Engineer" {...field} />
+                      <Input placeholder="e.g., Software Engineer" {...field} className="border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -154,7 +149,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                   <FormItem>
                     <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Target Location</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., San Francisco, CA" {...field} />
+                      <Input placeholder="e.g., San Francisco, CA" {...field} className="border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -169,7 +164,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                   <FormLabel className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Career Level</FormLabel>
                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="border-border">
                         <SelectValue placeholder="Select your career level" />
                       </SelectTrigger>
                     </FormControl>
@@ -204,14 +199,19 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    className="w-full"
+                                    className="w-full border-border"
                                     onClick={() => fileInputRef.current?.click()}
+                                    disabled={isParsing}
                                 >
-                                    <FileUp className="mr-2 h-4 w-4" />
-                                    Upload Resume (PDF or TXT)
+                                    {isParsing ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <FileUp className="mr-2 h-4 w-4" />
+                                    )}
+                                    {isParsing ? 'Parsing PDF...' : 'Upload Resume (PDF or TXT)'}
                                 </Button>
                             ) : (
-                                <div className="flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                <div className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm">
                                     <span className="truncate">{fileName}</span>
                                     <Button
                                         type="button"
@@ -239,7 +239,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                   <FormControl>
                     <Textarea
                       placeholder="Paste the full job description text here."
-                      className="min-h-[150px] resize-y"
+                      className="min-h-[150px] resize-y border-border"
                       {...field}
                     />
                   </FormControl>
@@ -247,7 +247,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isLoading} className="w-full">
+            <Button type="submit" disabled={isLoading || isParsing} className="w-full">
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
