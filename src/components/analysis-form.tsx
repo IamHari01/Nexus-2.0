@@ -68,18 +68,23 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
 
     if (file.type === 'application/pdf') {
       try {
-        // Dynamically load pdfjs only in the client handler to avoid server hangs
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        // Use a dynamic import but handle potential chunk loading errors gracefully
+        const pdfjs = await import('pdfjs-dist');
+        
+        // Use a reliable CDN for the worker to avoid local bundler/chunk issues
+        const PDFJS_VERSION = '4.5.136';
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
         let fullText = '';
+        
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
         }
+        
         form.setValue('resumeText', fullText, { shouldValidate: true });
         setFileName(file.name);
       } catch (error) {
@@ -87,7 +92,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         toast({
           variant: 'destructive',
           title: 'PDF Parsing Error',
-          description: 'Could not extract text from the PDF. Try copying and pasting text instead.',
+          description: 'The engine could not process this PDF. Please try copying and pasting your resume text instead.',
         });
       }
     } else if (file.type === 'text/plain') {
