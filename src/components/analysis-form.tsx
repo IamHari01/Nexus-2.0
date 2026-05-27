@@ -71,8 +71,8 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         // Import explicitly from the build entry to avoid Turbopack chunk issues
         const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
         
-        // Use a reliable CDN for the worker
-        const PDFJS_VERSION = '4.5.136';
+        // Use a reliable CDN for the worker that matches the pinned API version
+        const PDFJS_VERSION = '4.10.38';
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
