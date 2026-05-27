@@ -65,22 +65,22 @@ function MatchBadge({ status }: { status: 'High' | 'Medium' | 'Low' }) {
 
 export default function AnalysisResults({ result }: { result: AnalysisResult }) {
   const [step, setStep] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Simulate chatbot-like staggered reveal
+    // Staggered reveal like a chatbot
     const timers = [
-      setTimeout(() => setStep(1), 400),   // Show Header & Score
-      setTimeout(() => setStep(2), 1500),  // Show Reasoning
-      setTimeout(() => setStep(3), 2600),  // Show Skills
-      setTimeout(() => setStep(4), 3700),  // Show Learning Path
-      setTimeout(() => setStep(5), 4800),  // Show Related Jobs
+      setTimeout(() => setStep(1), 500),   // Header
+      setTimeout(() => setStep(2), 1600),  // Reasoning
+      setTimeout(() => setStep(3), 2800),  // Skills
+      setTimeout(() => setStep(4), 4000),  // Learning Path
+      setTimeout(() => setStep(5), 5200),  // Related Jobs
     ];
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // Auto-scroll logic as new content appears
   useEffect(() => {
+    // Smooth scroll as content appears
     if (step > 1) {
       window.scrollTo({
         top: document.body.scrollHeight,
@@ -98,7 +98,7 @@ export default function AnalysisResults({ result }: { result: AnalysisResult }) 
 
   return (
     <TooltipProvider>
-    <div ref={containerRef} className="max-w-3xl mx-auto space-y-8 pb-32">
+    <div ref={scrollRef} className="max-w-3xl mx-auto space-y-8 pb-32 pt-4">
       {/* Header & Score */}
       <Card className={cn("overflow-hidden border-border shadow-md transition-all duration-1000", step >= 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10")}>
         <CardHeader className="bg-secondary/10 border-b border-border">
@@ -126,7 +126,7 @@ export default function AnalysisResults({ result }: { result: AnalysisResult }) 
       </Card>
 
       {/* ATS Reasoning */}
-      <div className={cn("relative bg-muted/30 p-8 rounded-2xl border border-border transition-all duration-1000 delay-300", step >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10")}>
+      <div className={cn("relative bg-muted/30 p-8 rounded-2xl border border-border transition-all duration-1000", step >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10")}>
         <MessageSquare className="absolute -top-3 -left-3 h-8 w-8 text-primary bg-background rounded-full p-1.5 border border-border shadow-sm" />
         <h4 className="font-bold flex items-center gap-2 text-foreground mb-4">
           <Lightbulb className="h-5 w-5 text-yellow-500"/>
