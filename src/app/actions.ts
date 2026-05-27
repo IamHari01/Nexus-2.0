@@ -16,28 +16,49 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   data?: ShortlistingProbabilityOutput;
   error?: string;
 }> {
-  // Check for API key if explicitly asked by user
-  if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  // Check for API key existence
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  
+  if (!apiKey) {
     return {
       success: false,
-      error: 'Gemini API key is missing. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
+      error: 'Gemini API key is missing. Please set GOOGLE_GENAI_API_KEY in your .env file.',
     };
   }
 
   try {
     const result = await displayShortlistingProbability(data);
-    if (typeof result.shortlist_probability !== 'number') {
-      console.error('AI returned unexpected data shape:', result);
+    
+    if (!result || typeof result.shortlist_probability !== 'number') {
       return {
         success: false,
-        error: 'AI returned an invalid response format. Please try again.',
+        error: 'The AI returned an incomplete response. Please try submitting again.',
       };
     }
-    return {success: true, data: result};
+    
+    return { success: true, data: result };
   } catch (e: any) {
     console.error('Analysis error:', e);
-    const errorMessage = e.message || 'An unknown error occurred during AI analysis.';
-    return {success: false, error: errorMessage};
+    
+    // Provide user-friendly messages for common API errors
+    if (e.message?.includes('API key not valid') || e.message?.includes('400')) {
+      return {
+        success: false,
+        error: 'Your Gemini API key appears to be invalid or expired. Please verify it in your .env file.',
+      };
+    }
+
+    if (e.message?.includes('safety')) {
+      return {
+        success: false,
+        error: 'The analysis was blocked by AI safety filters. Please try with different content.',
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Nexus engine encountered an error. Please check your connection and try again.',
+    };
   }
 }
 
@@ -48,9 +69,9 @@ export async function findRelatedJobsAction(data: FindRelatedJobsInput): Promise
 }> {
   try {
     const result = await findRelatedJobs(data);
-    return {success: true, data: result};
+    return { success: true, data: result };
   } catch (e: any) {
     console.error('Related jobs error:', e);
-    return {success: false, error: e.message || 'Failed to fetch related job opportunities.'};
+    return { success: false, error: 'Failed to find related opportunities.' };
   }
 }
