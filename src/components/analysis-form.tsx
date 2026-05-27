@@ -68,23 +68,28 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
 
     if (file.type === 'application/pdf') {
       try {
-        // Use a dynamic import but handle potential chunk loading errors gracefully
-        const pdfjs = await import('pdfjs-dist');
+        // Import explicitly from the build entry to avoid Turbopack chunk issues
+        const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
         
-        // Use a reliable CDN for the worker to avoid local bundler/chunk issues
+        // Use a reliable CDN for the worker
         const PDFJS_VERSION = '4.5.136';
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-        let fullText = '';
+        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
         
+        let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
         }
         
+        if (!fullText.trim()) {
+          throw new Error('Empty PDF content');
+        }
+
         form.setValue('resumeText', fullText, { shouldValidate: true });
         setFileName(file.name);
       } catch (error) {
@@ -92,7 +97,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         toast({
           variant: 'destructive',
           title: 'PDF Parsing Error',
-          description: 'The engine could not process this PDF. Please try copying and pasting your resume text instead.',
+          description: 'Could not extract text from the PDF. Try copying and pasting text instead.',
         });
       }
     } else if (file.type === 'text/plain') {
@@ -200,7 +205,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    className="w-full border-border border-dashed py-10 flex-col gap-2 h-auto"
+                                    className="w-full border-border border-dashed py-10 flex-col gap-2 h-auto hover:bg-muted/50 transition-colors"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isParsing}
                                 >
@@ -210,7 +215,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                                       <FileUp className="h-6 w-6 text-muted-foreground" />
                                     )}
                                     <div className="text-center">
-                                      <p className="font-semibold">{isParsing ? 'Parsing Resume...' : 'Click to Upload Resume'}</p>
+                                      <p className="font-semibold">{isParsing ? 'Engine Processing...' : 'Upload Resume'}</p>
                                       <p className="text-xs text-muted-foreground">PDF or TXT supported</p>
                                     </div>
                                 </Button>
