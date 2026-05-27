@@ -10,6 +10,12 @@ import {
   type FindRelatedJobsInput,
   type FindRelatedJobsOutput,
 } from '@/ai/flows/find-related-jobs';
+import { parseResume } from '@/ai/agents/resume-parser';
+import { fetchJobs } from '@/ai/agents/job-fetcher';
+import { matchJobs } from '@/ai/agents/matcher';
+import { DBManager } from '@/lib/db';
+import type { CandidateProfile, JobMatchResult, MultiAgentResult } from '@/lib/job-types';
+import { runOrchestrator } from '@/ai/orchestrator/graph';
 
 export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Promise<{
   success: boolean;
@@ -22,7 +28,7 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   if (!apiKey) {
     return {
       success: false,
-      error: 'Gemini API key is missing. Please set GOOGLE_GENAI_API_KEY in your .env file.',
+      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
     };
   }
 
@@ -73,5 +79,72 @@ export async function findRelatedJobsAction(data: FindRelatedJobsInput): Promise
   } catch (e: any) {
     console.error('Related jobs error:', e);
     return { success: false, error: 'Failed to find related opportunities.' };
+  }
+}
+
+// NEW: Server Action for parsing a resume
+export async function parseResumeAction(resumeText: string): Promise<{
+  success: boolean;
+  data?: CandidateProfile;
+  error?: string;
+}> {
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
+    };
+  }
+
+  try {
+    const profile = await parseResume(resumeText);
+    return { success: true, data: profile };
+  } catch (e: any) {
+    console.error('Resume parsing action error:', e);
+    return { success: false, error: 'Failed to parse resume content.' };
+  }
+}
+
+// NEW: Server Action for fetching and matching jobs in real-time via Multi-Agent Graph
+export async function fetchAndMatchJobsAction(
+  resumeText: string,
+  jobTitle: string,
+  location: string = 'Remote',
+  remoteOnly: boolean = false
+): Promise<{
+  success: boolean;
+  result?: MultiAgentResult;
+  error?: string;
+}> {
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
+    };
+  }
+
+  try {
+    // Run the multi-agent LangGraph orchestrator
+    const result = await runOrchestrator({
+      resumeText,
+      jobQuery: jobTitle,
+      location,
+      remoteOnly
+    });
+
+    // Save outputs in database for dashboard persistence
+    await DBManager.saveJobs(result.jobs);
+    
+    for (const match of result.matches) {
+      await DBManager.saveMatchResult(match);
+    }
+    
+    await DBManager.saveLatestAnalysis(result);
+
+    return { success: true, result };
+  } catch (e: any) {
+    console.error('Job match action error:', e);
+    return { success: false, error: e.message || 'Failed to execute multi-agent intelligence orchestrator.' };
   }
 }

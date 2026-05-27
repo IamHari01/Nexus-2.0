@@ -18,8 +18,8 @@ export default function HistoryList() {
           {history.length > 0 ? (
             history.map((item) => (
               <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton asChild variant="ghost" size="sm" tooltip={item.job_title}>
-                  <Link href={`/analysis/${item.id}`}>
+                <SidebarMenuButton asChild size="sm" tooltip={item.job_title}>
+                  <Link href={`/?id=${item.id}`}>
                     <HistoryIcon />
                     <span className="truncate">{item.job_title}</span>
                   </Link>

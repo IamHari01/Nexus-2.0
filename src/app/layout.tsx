@@ -19,8 +19,9 @@ import { HistoryProvider } from '@/context/history-context';
 import HistoryList from '@/components/history-list';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { LogOut } from 'lucide-react';
+import { LogOut, LayoutDashboard, FileText } from 'lucide-react';
 import Logo from '@/components/logo';
+import Link from 'next/link';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -59,6 +60,27 @@ export default function RootLayout({
                   <SidebarTrigger />
                 </SidebarHeader>
                 <SidebarContent>
+                  <SidebarMenu className="px-2 pt-2 gap-1">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Resume Analyzer">
+                        <Link href="/">
+                          <FileText className="h-4 w-4" />
+                          <span>Resume Analyzer</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Job Dashboard">
+                        <Link href="/dashboard">
+                          <LayoutDashboard className="h-4 w-4" />
+                          <span>Job Dashboard</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                  <div className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest group-data-[collapsible=icon]:hidden mt-4">
+                    Analysis History
+                  </div>
                   <HistoryList />
                 </SidebarContent>
                 <SidebarFooter>
@@ -67,7 +89,7 @@ export default function RootLayout({
                       <ThemeToggle />
                     </SidebarMenuItem>
                     <SidebarMenuItem>
-                      <SidebarMenuButton variant="ghost" tooltip="Logout">
+                      <SidebarMenuButton tooltip="Logout">
                         <LogOut />
                         <span>Logout</span>
                       </SidebarMenuButton>
