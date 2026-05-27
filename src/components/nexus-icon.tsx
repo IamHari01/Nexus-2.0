@@ -7,10 +7,10 @@ export default function NexusIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="url(#nexus-gradient)"
-      strokeWidth="3"
+      strokeWidth="3.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("h-8 w-8", className)}
+      className={cn("h-9 w-9", className)}
     >
       <defs>
         <linearGradient id="nexus-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -18,7 +18,8 @@ export default function NexusIcon({ className }: { className?: string }) {
           <stop offset="100%" stopColor="hsl(var(--destructive))" />
         </linearGradient>
       </defs>
-      <path d="M6 20V4L18 20V4" />
+      {/* Clear bold N shape */}
+      <path d="M6 19V5L18 19V5" />
     </svg>
   );
 }

@@ -68,18 +68,17 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
 
     if (file.type === 'application/pdf') {
       try {
-        // Dynamically import PDF.js ONLY in the client-side event handler
+        // Dynamically load pdfjs only in the client handler to avoid server hangs
         const pdfjsLib = await import('pdfjs-dist');
-        // Set worker source dynamically
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          fullText += textContent.items.map(item => (typeof item === 'object' && 'str' in item ? item.str : '')).join(' ') + '\n';
+          fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
         }
         form.setValue('resumeText', fullText, { shouldValidate: true });
         setFileName(file.name);
@@ -88,7 +87,7 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
         toast({
           variant: 'destructive',
           title: 'PDF Parsing Error',
-          description: 'Could not extract text from the PDF. Please ensure it is a valid and text-based PDF.',
+          description: 'Could not extract text from the PDF. Try copying and pasting text instead.',
         });
       }
     } else if (file.type === 'text/plain') {
@@ -104,25 +103,20 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
     }
 
     setIsParsing(false);
-    if(event.target){
-        event.target.value = '';
-    }
+    if (event.target) event.target.value = '';
   };
   
   const handleClearFile = () => {
     form.setValue('resumeText', '', { shouldValidate: true });
     setFileName(null);
-    if(fileInputRef.current){
-        fileInputRef.current.value = '';
-    }
   }
 
   return (
-    <Card className="border-border">
+    <Card className="border-border shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary" />
-          <span>Analysis Input</span>
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span>Analysis Profile</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -134,9 +128,9 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 name="targetJobTitle"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2"><Target className="h-4 w-4" />Target Job Title</FormLabel>
+                    <FormLabel className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><Target className="h-3 w-3" />Target Role</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Software Engineer" {...field} className="border-border" />
+                      <Input placeholder="e.g., Senior Frontend Engineer" {...field} className="border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -147,21 +141,22 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 name="targetLocation"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Target Location</FormLabel>
+                    <FormLabel className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><MapPin className="h-3 w-3" />Location</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., San Francisco, CA" {...field} className="border-border" />
+                      <Input placeholder="e.g., Remote / New York" {...field} className="border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+            
             <FormField
               control={form.control}
               name="careerLevel"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Career Level</FormLabel>
+                  <FormLabel className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><GraduationCap className="h-3 w-3" />Experience Level</FormLabel>
                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="border-border">
@@ -180,12 +175,13 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="resumeText"
               render={({ field }) => (
                 <FormItem>
-                    <FormLabel className="flex items-center gap-2"><FileText className="h-4 w-4" />Your Resume</FormLabel>
+                    <FormLabel className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><FileText className="h-3 w-3" />Resume Content</FormLabel>
                     <FormControl>
                         <div>
                             <input
@@ -199,25 +195,31 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    className="w-full border-border"
+                                    className="w-full border-border border-dashed py-10 flex-col gap-2 h-auto"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isParsing}
                                 >
                                     {isParsing ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
                                     ) : (
-                                      <FileUp className="mr-2 h-4 w-4" />
+                                      <FileUp className="h-6 w-6 text-muted-foreground" />
                                     )}
-                                    {isParsing ? 'Parsing PDF...' : 'Upload Resume (PDF or TXT)'}
+                                    <div className="text-center">
+                                      <p className="font-semibold">{isParsing ? 'Parsing Resume...' : 'Click to Upload Resume'}</p>
+                                      <p className="text-xs text-muted-foreground">PDF or TXT supported</p>
+                                    </div>
                                 </Button>
                             ) : (
-                                <div className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm">
-                                    <span className="truncate">{fileName}</span>
+                                <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                      <FileText className="h-4 w-4 text-primary shrink-0" />
+                                      <span className="truncate font-medium">{fileName}</span>
+                                    </div>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-6 shrink-0"
+                                        className="h-6 w-6"
                                         onClick={handleClearFile}
                                     >
                                         <X className="h-4 w-4" />
@@ -230,16 +232,17 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="jobDescription"
               render={({ field }) => (
                 <FormItem>
-                    <FormLabel className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Job Description</FormLabel>
+                    <FormLabel className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><Briefcase className="h-3 w-3" />Job Description</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Paste the full job description text here."
-                      className="min-h-[150px] resize-y border-border"
+                      placeholder="Paste the full JD requirements and responsibilities here..."
+                      className="min-h-[180px] resize-y border-border"
                       {...field}
                     />
                   </FormControl>
@@ -247,14 +250,15 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isLoading || isParsing} className="w-full">
+
+            <Button type="submit" disabled={isLoading || isParsing} className="w-full h-12 text-lg font-bold">
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Generating Analysis...
                 </>
               ) : (
-                'Run Analysis'
+                'Run AI Analysis'
               )}
             </Button>
           </form>

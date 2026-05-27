@@ -16,20 +16,28 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   data?: ShortlistingProbabilityOutput;
   error?: string;
 }> {
+  // Check for API key if explicitly asked by user
+  if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    return {
+      success: false,
+      error: 'Gemini API key is missing. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
+    };
+  }
+
   try {
     const result = await displayShortlistingProbability(data);
     if (typeof result.shortlist_probability !== 'number') {
       console.error('AI returned unexpected data shape:', result);
       return {
         success: false,
-        error: 'AI returned an invalid response. Please check your inputs and try again.',
+        error: 'AI returned an invalid response format. Please try again.',
       };
     }
     return {success: true, data: result};
-  } catch (e) {
-    console.error(e);
-    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return {success: false, error: `Failed to run analysis: ${errorMessage}`};
+  } catch (e: any) {
+    console.error('Analysis error:', e);
+    const errorMessage = e.message || 'An unknown error occurred during AI analysis.';
+    return {success: false, error: errorMessage};
   }
 }
 
@@ -40,14 +48,9 @@ export async function findRelatedJobsAction(data: FindRelatedJobsInput): Promise
 }> {
   try {
     const result = await findRelatedJobs(data);
-    if (!result.related_jobs) {
-      console.error('AI returned unexpected data shape for related jobs:', result);
-      return {success: false, error: 'AI returned an invalid response for related jobs.'};
-    }
     return {success: true, data: result};
-  } catch (e) {
-    console.error(e);
-    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return {success: false, error: `Failed to find related jobs: ${errorMessage}`};
+  } catch (e: any) {
+    console.error('Related jobs error:', e);
+    return {success: false, error: e.message || 'Failed to fetch related job opportunities.'};
   }
 }
