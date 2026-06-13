@@ -12,6 +12,7 @@ import {
 } from '@/lib/job-types';
 import { fetchJobs } from '@/ai/agents/job-fetcher';
 import { matchJobs } from '@/ai/agents/matcher';
+import { generateStructuredOutput, RateLimitError } from '@/lib/llm-client';
 
 // ---------------------------------------------------------
 // Observability / Tracing Utilities
@@ -68,6 +69,19 @@ async function executeWithRetry<T>(
   } catch (err: any) {
     const duration = Date.now() - startTime;
     console.error(`[Orchestrator] Node "${nodeName}" failed on attempt ${attemptCount + 1}:`, err);
+
+    // Rate limit errors should NOT be retried — propagate immediately
+    if (err instanceof RateLimitError || err?.name === 'RateLimitError') {
+      logs = logTrace(
+        logs,
+        nodeName,
+        'failed',
+        `⚠ API quota exhausted: ${err.userMessage || err.message}`,
+        0,
+        duration
+      );
+      throw err;
+    }
     
     if (attemptCount < maxRetries) {
       retries[nodeName] = attemptCount + 1;
@@ -100,18 +114,18 @@ async function executeWithRetry<T>(
 // Zod Schemas for Structured Model Output
 // ---------------------------------------------------------
 const CandidateProfileSchema = z.object({
-  name: z.string().optional().describe('Candidate name'),
-  email: z.string().optional().describe('Candidate email'),
+  name: z.string().nullable().optional().describe('Candidate name'),
+  email: z.string().nullable().optional().describe('Candidate email'),
   skills: z.array(z.string()).describe('Core skills'),
   technologies: z.array(z.string()).describe('Programming languages, tools, frameworks'),
-  experience_years: z.number().optional().describe('Total years of professional experience'),
+  experience_years: z.number().nullable().optional().describe('Total years of professional experience'),
   education: z.array(z.object({
     degree: z.string(),
-    field_of_study: z.string().optional(),
-    institution: z.string().optional(),
-    graduation_year: z.string().optional()
-  })).optional().describe('Education records'),
-  certifications: z.array(z.string()).optional().describe('Certifications'),
+    field_of_study: z.string().nullable().optional(),
+    institution: z.string().nullable().optional(),
+    graduation_year: z.string().nullable().optional()
+  })).nullable().optional().describe('Education records'),
+  certifications: z.array(z.string()).nullable().optional().describe('Certifications'),
   preferred_roles: z.array(z.string()).describe('Job roles matching background')
 });
 
@@ -156,8 +170,7 @@ export async function runResumeParserAgent(
   const execution = await executeWithRetry<CandidateProfile>(
     nodeName,
     async () => {
-      const response = await ai.generate({
-        model: 'googleai/gemini-2.5-pro',
+      const profile = await generateStructuredOutput({
         prompt: `Parse the following raw candidate resume text and extract a highly structured profile.
         
         Resume Content:
@@ -166,12 +179,8 @@ export async function runResumeParserAgent(
         """
         
         Extract name, email, skills, technologies, years of experience, education details, certifications, and preferred roles.`,
-        output: {
-          schema: CandidateProfileSchema
-        }
-      });
-
-      const profile = response.output as CandidateProfile;
+        schema: CandidateProfileSchema as any
+      }) as any;
       
       // Calculate parsing confidence based on completeness of fields
       let score = 0;
@@ -257,8 +266,7 @@ export async function runMarketAnalyzerAgent(
   const execution = await executeWithRetry<MarketTrends>(
     nodeName,
     async () => {
-      const response = await ai.generate({
-        model: 'googleai/gemini-2.5-pro',
+      const marketTrends = await generateStructuredOutput({
         prompt: `You are an elite Market Research & Salary Intelligence Agent.
         Analyze the current job market demand, hiring rates, salary ranges, top employers, and hot skills for the following job profile:
         
@@ -270,12 +278,8 @@ export async function runMarketAnalyzerAgent(
         - Experience Years: ${profile.experience_years ?? 'Not specified'}
         
         Generate a structured analysis containing demandLevel (High/Medium/Low), salaryRange, topHiringCompanies, trendingSkills, and a market summary.`,
-        output: {
-          schema: MarketTrendsSchema
-        }
-      });
-
-      const marketTrends = response.output as MarketTrends;
+        schema: MarketTrendsSchema as any
+      }) as any;
       const confidence = 0.95; // LLM analytical confidence
 
       return {
@@ -314,7 +318,7 @@ export async function runOpportunityRankerAgent(
 
       // Re-use our robust two-stage matching engine
       // This runs fast scoring, selects top N, and runs deep AI matching using Gemini
-      const matchResults = await matchJobs(profile, jobs, 4);
+      const matchResults = await matchJobs(profile, jobs, 20);
       
       // Calculate overall matching confidence
       const hasDeepScores = matchResults.some(r => r.reasoning && !r.reasoning.includes('fast keyword'));
@@ -361,8 +365,7 @@ export async function runResumeOptimizerAgent(
         .map(j => `${j.job_title} at ${j.company}: Missing Skills: [${j.missing_skills.join(', ')}]`)
         .join('\n');
 
-      const response = await ai.generate({
-        model: 'googleai/gemini-2.5-pro',
+      const optimization = await generateStructuredOutput({
         prompt: `You are an elite ATS Optimization and Resume Writer Agent.
         Compare the candidate's profile, target roles, and market intelligence to identify gaps and suggest tactical resume improvements.
         
@@ -383,12 +386,8 @@ export async function runResumeOptimizerAgent(
         2. Identify candidate skills to highlight more prominently.
         3. Suggest 2-3 specific bullet-point wording rewrites (wordingImprovements) replacing a typical generic statement (original) with a metrics-driven, action-verb-oriented bullet point (suggested), explaining why (reason).
         4. Give general layout or formatting suggestions.`,
-        output: {
-          schema: ResumeOptimizationSchema
-        }
-      });
-
-      const optimization = response.output as ResumeOptimization;
+        schema: ResumeOptimizationSchema as any
+      }) as any;
       const confidence = 0.9;
 
       return {
@@ -414,7 +413,6 @@ export async function runResumeOptimizerAgent(
 export async function runRecommendationGeneratorAgent(
   profile: CandidateProfile,
   rankedOpportunities: JobMatchResult[],
-  optimizedResumeSuggestions: ResumeOptimization,
   marketAnalysis: MarketTrends,
   state: { logs: TraceLog[]; retries: Record<string, number> }
 ) {
@@ -428,13 +426,13 @@ export async function runRecommendationGeneratorAgent(
         ? `Top target opportunity: ${topJob.job_title} at ${topJob.company} (${topJob.location}). Match score: ${topJob.score}%.`
         : 'No specific top job found.';
 
-      const response = await ai.generate({
-        model: 'googleai/gemini-2.5-pro',
+      const recommendations = await generateStructuredOutput({
         prompt: `You are a Career Strategist and Executive Coach Agent.
-        Synthesize the candidate's profile, market conditions, resume gaps, and top jobs into a personalized recommendation report.
+        Synthesize the candidate's profile, market conditions, and top jobs into a personalized recommendation report.
         
         Candidate Profile:
         - Experience: ${profile.experience_years ?? 0} years
+        - Core Skills: ${profile.skills.join(', ')}
         - Preferred roles: ${profile.preferred_roles.join(', ')}
         
         Market Context:
@@ -443,19 +441,12 @@ export async function runRecommendationGeneratorAgent(
         
         ${jobContext}
         
-        Resume Summary:
-        ${optimizedResumeSuggestions.summary}
-        
         Generate a structured personalized report:
         1. careerActionPlan: 3-5 specific, chronological next steps (e.g. upskill in X, network on LinkedIn for Y, tailor resume for Z).
         2. applicationStrategy: A precise tactic for applying to these roles (e.g., outreach message hook to hiring manager, portfolio item to highlight).
         3. interviewPrepTips: Top 3 technical/behavioral focus areas for interviews in this category.`,
-        output: {
-          schema: PersonalizedRecommendationsSchema
-        }
-      });
-
-      const recommendations = response.output as PersonalizedRecommendations;
+        schema: PersonalizedRecommendationsSchema as any
+      }) as any;
       const confidence = 0.95;
 
       return {

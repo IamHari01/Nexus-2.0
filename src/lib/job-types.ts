@@ -10,6 +10,10 @@ export interface Job {
   posted_at?: string;
   employment_type?: string; // Full-time, Part-time, Contract, Intern
   is_remote: boolean;
+  company_logo?: string;
+  publisher?: string;
+  benefits?: string[];
+  required_skills?: string[];
   raw_data?: any; // Original API payload for debugging
 }
 
@@ -47,6 +51,12 @@ export interface JobMatchResult {
     estimated_time: string;
   }>;
   matched_at: string; // ISO String
+  company_logo?: string;
+  salary?: string;
+  employment_type?: string;
+  publisher?: string;
+  benefits?: string[];
+  required_skills?: string[];
 }
 
 export interface DashboardStats {

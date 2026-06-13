@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { generateStructuredOutput } from '@/lib/llm-client';
 
 const ShortlistingProbabilityInputSchema = z.object({
   resumeText: z.string().describe('The text content of the candidate\'s resume.'),
@@ -25,7 +26,7 @@ const ShortlistingProbabilityOutputSchema = z.object({
   company: z.string().describe('The name of the company offering the job.'),
   job_title: z.string().describe('The title of the job.'),
   location: z.string().describe('The location of the job.'),
-  shortlist_probability: z.number().int().min(0).max(99).describe('The probability (0-99) of the candidate being shortlisted.'),
+  shortlist_probability: z.number().min(0).max(99).transform(Math.round).describe('The probability (0-99) of the candidate being shortlisted.'),
   match_status: z.enum(['High', 'Medium', 'Low']).describe('The overall match status between the candidate and the job.'),
   reasoning: z.string().describe('A 1-2 sentence explanation of the shortlisting probability, from an ATS perspective.'),
   matched_skills: z.string().array().describe('The skills from the resume that match the job description.'),
@@ -36,7 +37,7 @@ const ShortlistingProbabilityOutputSchema = z.object({
       youtube_query: z.string(),
       estimated_time: z.string()
     }).array().describe('A list of recommended learning resources to address the skill gaps.'),
-  job_link: z.string().url().describe('A link to the job posting.'),
+  job_link: z.string().url().catch('https://example.com/jobs').describe('A link to the job posting.'),
 });
 export type ShortlistingProbabilityOutput = z.infer<typeof ShortlistingProbabilityOutputSchema>;
 
@@ -134,7 +135,65 @@ const displayShortlistingProbabilityFlow = ai.defineFlow(
     outputSchema: ShortlistingProbabilityOutputSchema,
   },
   async input => {
-    const {output} = await displayShortlistingProbabilityPrompt(input);
-    return output!;
+    const promptText = `You are a career intelligence engine that helps users actually get shortlisted.
+  
+    Given the following resume and job description, assess the candidate's fit and provide a shortlisting probability.
+  
+    Resume:
+    ${input.resumeText}
+  
+    Job Description:
+    ${input.jobDescription}
+  
+    Target Job Title: ${input.targetJobTitle}
+    Target Location: ${input.targetLocation}
+    Career Level: ${input.careerLevel || 'Not specified'}
+  
+    Follow these behavioral rules:
+  
+    ❌ Never inflate skills
+    ❌ Never encourage mass applications
+    ❌ Never show expired jobs
+    ✅ Always explain why a score is high or low
+    ✅ Treat each job like a product launch
+    ✅ Be empathetic — users may be stressed
+    ✅ Optimize for real-world hiring outcomes
+  
+    ATS Scoring Philosophy:
+    30% Skill Match (semantic)
+    30% Experience Depth
+    20% Tooling / Workflow familiarity
+    20% Industry context & projects
+  
+    If resume says “Python”, but JD needs “Scaling Python APIs”, score it low unless evidence exists.
+  
+    Learning Recommendation Rules:
+    Learning must be:
+    Job-specific
+    Time-bounded
+    Market-relevant
+    Prefer hands-on content
+    Prefer 2024–2026 material
+  
+    Ethics & Fairness
+    Ignore gender, age, name, university prestige
+    Focus only on skills, evidence, and growth potential
+    Flag biased JDs internally (do not show bias to user)
+  
+    Tone
+    Objective
+    Tactical
+    Honest
+    Industry-grade (LinkedIn / Google / Meta level)
+  
+    You are not a chatbot.
+    You are a career intelligence engine that helps users actually get shortlisted.
+    Act decisively. Explain clearly. Optimize outcomes.`;
+
+    const result = await generateStructuredOutput({
+      prompt: promptText,
+      schema: ShortlistingProbabilityOutputSchema as any
+    });
+    return result as any;
   }
 );

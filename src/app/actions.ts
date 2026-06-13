@@ -14,6 +14,7 @@ import { parseResume } from '@/ai/agents/resume-parser';
 import { fetchJobs } from '@/ai/agents/job-fetcher';
 import { matchJobs } from '@/ai/agents/matcher';
 import { DBManager } from '@/lib/db';
+import { RateLimitError } from '@/lib/llm-client';
 import type { CandidateProfile, JobMatchResult, MultiAgentResult } from '@/lib/job-types';
 import { runOrchestrator } from '@/ai/orchestrator/graph';
 
@@ -23,12 +24,12 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   error?: string;
 }> {
   // Check for API key existence
-  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   
   if (!apiKey) {
     return {
       success: false,
-      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
+      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
     };
   }
 
@@ -46,11 +47,19 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   } catch (e: any) {
     console.error('Analysis error:', e);
     
-    // Provide user-friendly messages for common API errors
-    if (e.message?.includes('API key not valid') || e.message?.includes('400')) {
+    // Handle rate limit / quota exhaustion with user-friendly warning
+    if (e instanceof RateLimitError || e?.name === 'RateLimitError') {
       return {
         success: false,
-        error: 'Your Gemini API key appears to be invalid or expired. Please verify it in your .env file.',
+        error: e.userMessage || e.message,
+      };
+    }
+
+    // Provide user-friendly messages for common API errors
+    if (e.message?.includes('API key not valid') || e.message?.includes('400') || e.message?.includes('401')) {
+      return {
+        success: false,
+        error: 'Your Groq API key appears to be invalid or expired. Please verify it in your .env file.',
       };
     }
 
@@ -78,6 +87,9 @@ export async function findRelatedJobsAction(data: FindRelatedJobsInput): Promise
     return { success: true, data: result };
   } catch (e: any) {
     console.error('Related jobs error:', e);
+    if (e instanceof RateLimitError || e?.name === 'RateLimitError') {
+      return { success: false, error: e.userMessage || e.message };
+    }
     return { success: false, error: 'Failed to find related opportunities.' };
   }
 }
@@ -88,11 +100,11 @@ export async function parseResumeAction(resumeText: string): Promise<{
   data?: CandidateProfile;
   error?: string;
 }> {
-  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
+      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
     };
   }
 
@@ -101,6 +113,9 @@ export async function parseResumeAction(resumeText: string): Promise<{
     return { success: true, data: profile };
   } catch (e: any) {
     console.error('Resume parsing action error:', e);
+    if (e instanceof RateLimitError || e?.name === 'RateLimitError') {
+      return { success: false, error: e.userMessage || e.message };
+    }
     return { success: false, error: 'Failed to parse resume content.' };
   }
 }
@@ -116,11 +131,11 @@ export async function fetchAndMatchJobsAction(
   result?: MultiAgentResult;
   error?: string;
 }> {
-  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Gemini API key is missing. Please set GEMINI_API_KEY in your .env file.',
+      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
     };
   }
 
@@ -145,6 +160,9 @@ export async function fetchAndMatchJobsAction(
     return { success: true, result };
   } catch (e: any) {
     console.error('Job match action error:', e);
+    if (e instanceof RateLimitError || e?.name === 'RateLimitError') {
+      return { success: false, error: e.userMessage || e.message };
+    }
     return { success: false, error: e.message || 'Failed to execute multi-agent intelligence orchestrator.' };
   }
 }

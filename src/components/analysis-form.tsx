@@ -55,7 +55,48 @@ interface AnalysisFormProps {
 }
 
 export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps) {
-  const [fileName, setFileName] = React.useState<string | null>(null);
+  const getInitialValues = () => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_form_data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return {
+            resumeText: parsed.resumeText || '',
+            jobDescription: parsed.jobDescription || '',
+            targetJobTitle: parsed.targetJobTitle || '',
+            targetLocation: parsed.targetLocation || '',
+            careerLevel: parsed.careerLevel || 'Junior',
+          };
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    return {
+      resumeText: '',
+      jobDescription: '',
+      targetJobTitle: '',
+      targetLocation: '',
+      careerLevel: 'Junior',
+    };
+  };
+
+  const [fileName, setFileName] = React.useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_form_data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return parsed.fileName || null;
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    return null;
+  });
+
   const [isParsing, setIsParsing] = React.useState(false);
   const [clipboardSupported, setClipboardSupported] = React.useState(true);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -69,14 +110,24 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
 
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      resumeText: '',
-      jobDescription: '',
-      targetJobTitle: '',
-      targetLocation: '',
-      careerLevel: 'Junior',
-    },
+    defaultValues: getInitialValues(),
   });
+
+  const formValues = form.watch();
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const dataToSave = {
+        resumeText: formValues.resumeText || '',
+        jobDescription: formValues.jobDescription || '',
+        targetJobTitle: formValues.targetJobTitle || '',
+        targetLocation: formValues.targetLocation || '',
+        careerLevel: formValues.careerLevel || 'Junior',
+        fileName: fileName,
+      };
+      localStorage.setItem('nexus_form_data', JSON.stringify(dataToSave));
+    }
+  }, [formValues, fileName]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

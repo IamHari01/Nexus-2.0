@@ -1,6 +1,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { CandidateProfile, Job, JobMatchResult } from '@/lib/job-types';
+import { generateStructuredOutput } from '@/lib/llm-client';
 
 // Schema for Genkit Deep Matcher
 const DeepMatchInputSchema = z.object({
@@ -13,8 +14,8 @@ const JobMatchResultSchema = z.object({
   job_title: z.string().describe('The title of the job'),
   company: z.string().describe('The company offering the job'),
   location: z.string().describe('The location of the job'),
-  job_link: z.string().url().describe('Direct link to the job posting'),
-  score: z.number().int().min(0).max(100).describe('Overall match score (0-100)'),
+  job_link: z.string().url().catch('https://example.com/jobs').describe('Direct link to the job posting'),
+  score: z.number().min(0).max(100).transform(Math.round).describe('Overall match score (0-100)'),
   match_status: z.enum(['High', 'Medium', 'Low']).describe('Match category based on score: High (>=75), Medium (40-74), Low (<40)'),
   reasoning: z.string().describe('1-2 sentence explanation of the ATS match score, including key fit factors'),
   matched_skills: z.array(z.string()).describe('List of skills/technologies from the candidate that match the job requirements'),
@@ -66,8 +67,36 @@ export const deepMatchFlow = ai.defineFlow(
     outputSchema: JobMatchResultSchema,
   },
   async input => {
-    const { output } = await deepMatchPrompt(input);
-    return output!;
+    const promptText = `You are an elite ATS Match Scoring and Recommendation Agent.
+    Given the candidate's parsed profile and a target job listing, perform a deep, realistic ATS compatibility analysis.
+    
+    Candidate Profile:
+    """
+    ${input.profileJson}
+    """
+    
+    Job Details:
+    """
+    ${input.jobJson}
+    """
+    
+    Instructions:
+    1. Compare candidate's skills and technologies to the job title and requirements.
+    2. Determine matched skills (skills from candidate profile present in the job description).
+    3. Identify missing skills (crucial requirements in the job description that the candidate lacks).
+    4. Formulate learning path recommendations to bridge the gap.
+    5. Calculate a realistic compatibility score (0-100) based on:
+       - 40% skills and technologies match
+       - 40% experience fit (titles, years)
+       - 20% location & workspace type fit
+    6. Provide an honest, objective, and tactical reasoning summary.
+    7. Fill out all the required JSON fields.`;
+
+    const matchOut = await generateStructuredOutput({
+      prompt: promptText,
+      schema: JobMatchResultSchema as any
+    });
+    return matchOut as any;
   }
 );
 
@@ -115,7 +144,7 @@ export function calculateFastMatchScore(profile: CandidateProfile, job: Job): nu
 export async function matchJobs(
   profile: CandidateProfile,
   jobs: Job[],
-  topN: number = 4
+  topN: number = 20
 ): Promise<JobMatchResult[]> {
   console.log(`Starting Matching Engine. Matching candidate profile against ${jobs.length} jobs.`);
 
@@ -131,45 +160,93 @@ export async function matchJobs(
   // Take top N for deep AI matching (to optimize token usage and latency)
   const topJobs = jobsWithFastScore.slice(0, topN);
   
-  console.log(`Stage 1 complete. Running Stage 2 (Deep AI Match) for the top ${topJobs.length} jobs.`);
-
   const matchResults: JobMatchResult[] = [];
+  
+  const deepMatchLimit = 6;
+  const deepJobs = topJobs.slice(0, deepMatchLimit);
+  const fallbackJobs = topJobs.slice(deepMatchLimit);
 
-  for (const item of topJobs) {
-    try {
-      const deepMatchOut = await deepMatchFlow({
-        profileJson: JSON.stringify(profile),
-        jobJson: JSON.stringify(item.job),
-      });
+  console.log(`Stage 1 complete. Running Stage 2: Deep AI Match on top ${deepJobs.length} jobs, and Fast Match on remaining ${fallbackJobs.length} jobs.`);
 
-      matchResults.push({
-        ...deepMatchOut,
-        job_id: item.job.id,
-        job_title: item.job.job_title,
-        company: item.job.company,
-        location: item.job.location,
-        job_link: item.job.job_link,
-        matched_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error(`Deep AI matching failed for job: ${item.job.id}. Using fast match fallback.`, err);
-      // Fallback to basic structure on error
-      const score = item.fastScore;
-      matchResults.push({
-        job_id: item.job.id,
-        job_title: item.job.job_title,
-        company: item.job.company,
-        location: item.job.location,
-        job_link: item.job.job_link,
-        score,
-        match_status: score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low',
-        reasoning: 'Evaluated using fast keyword similarity engine.',
-        matched_skills: [],
-        missing_skills: [],
-        learning_path: [],
-        matched_at: new Date().toISOString(),
-      });
-    }
+  // Run deep matching in chunks of 3 parallel requests to prevent API rate limits and optimize load speeds
+  const chunkSize = 3;
+  for (let i = 0; i < deepJobs.length; i += chunkSize) {
+    const chunk = deepJobs.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(
+      chunk.map(async (item) => {
+        try {
+          const deepMatchOut = await deepMatchFlow({
+            profileJson: JSON.stringify(profile),
+            jobJson: JSON.stringify(item.job),
+          });
+
+          return {
+            ...deepMatchOut,
+            job_id: item.job.id,
+            job_title: item.job.job_title,
+            company: item.job.company,
+            location: item.job.location,
+            job_link: item.job.job_link,
+            matched_at: new Date().toISOString(),
+            company_logo: item.job.company_logo,
+            salary: item.job.salary,
+            employment_type: item.job.employment_type,
+            publisher: item.job.publisher,
+            benefits: item.job.benefits,
+            required_skills: item.job.required_skills,
+          };
+        } catch (err) {
+          console.error(`Deep AI matching failed for job: ${item.job.id}. Using fast match fallback.`, err);
+          const score = item.fastScore;
+          return {
+            job_id: item.job.id,
+            job_title: item.job.job_title,
+            company: item.job.company,
+            location: item.job.location,
+            job_link: item.job.job_link,
+            score,
+            match_status: (score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low') as 'High' | 'Medium' | 'Low',
+            reasoning: 'Evaluated using fast keyword similarity engine.',
+            matched_skills: [],
+            missing_skills: [],
+            learning_path: [],
+            matched_at: new Date().toISOString(),
+            company_logo: item.job.company_logo,
+            salary: item.job.salary,
+            employment_type: item.job.employment_type,
+            publisher: item.job.publisher,
+            benefits: item.job.benefits,
+            required_skills: item.job.required_skills,
+          };
+        }
+      })
+    );
+    matchResults.push(...chunkResults);
+  }
+
+  // Fast match formatting for the remaining jobs
+  for (const item of fallbackJobs) {
+    const score = item.fastScore;
+    matchResults.push({
+      job_id: item.job.id,
+      job_title: item.job.job_title,
+      company: item.job.company,
+      location: item.job.location,
+      job_link: item.job.job_link,
+      score,
+      match_status: (score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low') as 'High' | 'Medium' | 'Low',
+      reasoning: 'Analyzed via fast semantic keyword analysis.',
+      matched_skills: [],
+      missing_skills: [],
+      learning_path: [],
+      matched_at: new Date().toISOString(),
+      company_logo: item.job.company_logo,
+      salary: item.job.salary,
+      employment_type: item.job.employment_type,
+      publisher: item.job.publisher,
+      benefits: item.job.benefits,
+      required_skills: item.job.required_skills,
+    });
   }
 
   // Sort results by final match score descending

@@ -75,8 +75,20 @@ export type AgentStateType = typeof AgentStateAnnotation.State;
 async function resumeParserNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
   try {
     const res = await runResumeParserAgent(state.resumeText, { logs: state.logs, retries: state.retries });
+    const profile = res.profile;
+    if (profile && state.jobQuery) {
+      const roles = profile.preferred_roles || [];
+      const trimmedQuery = state.jobQuery.trim();
+      if (trimmedQuery) {
+        if (!roles.includes(trimmedQuery)) {
+          profile.preferred_roles = [trimmedQuery, ...roles];
+        } else {
+          profile.preferred_roles = [trimmedQuery, ...roles.filter(r => r !== trimmedQuery)];
+        }
+      }
+    }
     return {
-      profile: res.profile,
+      profile: profile,
       logs: res.logs,
       retries: res.retries,
       confidenceScores: { resumeParser: res.parserConfidence }
@@ -173,13 +185,12 @@ async function resumeOptimizerNode(state: AgentStateType): Promise<Partial<Agent
 }
 
 async function recommendationGeneratorNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
-  if (state.error || !state.profile || !state.rankedOpportunities || !state.optimizedResumeSuggestions || !state.marketAnalysis) return {};
+  if (state.error || !state.profile || !state.rankedOpportunities || !state.marketAnalysis) return {};
 
   try {
     const res = await runRecommendationGeneratorAgent(
       state.profile,
       state.rankedOpportunities,
-      state.optimizedResumeSuggestions,
       state.marketAnalysis,
       { logs: state.logs, retries: state.retries }
     );
@@ -286,18 +297,22 @@ const workflow = new StateGraph(AgentStateAnnotation)
 workflow
   .addEdge('__start__', 'resume_parser')
   
-  // Parallel Fork: ResumeParser splits into JobFetcher and MarketAnalyzer
+  // Parallel Fork 1: ResumeParser splits into JobFetcher and MarketAnalyzer
   .addEdge('resume_parser', 'job_fetcher')
   .addEdge('resume_parser', 'market_analyzer')
   
-  // Parallel Join: JobFetcher and MarketAnalyzer merge back at OpportunityRanker
+  // Parallel Join 1: JobFetcher and MarketAnalyzer merge back at OpportunityRanker
   .addEdge('job_fetcher', 'opportunity_ranker')
   .addEdge('market_analyzer', 'opportunity_ranker')
   
-  // Sequential pipeline
+  // Parallel Fork 2: OpportunityRanker splits into ResumeOptimizer and RecommendationGenerator
   .addEdge('opportunity_ranker', 'resume_optimizer')
-  .addEdge('resume_optimizer', 'recommendation_generator')
+  .addEdge('opportunity_ranker', 'recommendation_generator')
+  
+  // Parallel Join 2: ResumeOptimizer and RecommendationGenerator merge at ErrorRecovery
+  .addEdge('resume_optimizer', 'error_recovery')
   .addEdge('recommendation_generator', 'error_recovery')
+  
   .addEdge('error_recovery', '__end__');
 
 // Compile Graph

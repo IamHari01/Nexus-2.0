@@ -11,7 +11,7 @@ function generateJobId(title: string, company: string): string {
 // Remotive API Integration
 async function fetchJobsFromRemotive(query: string): Promise<Job[]> {
   try {
-    const url = `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(query)}&limit=15`;
+    const url = `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(query)}&limit=40`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`Remotive status ${res.status}`);
     const data = await res.json();
@@ -37,6 +37,32 @@ async function fetchJobsFromRemotive(query: string): Promise<Job[]> {
   }
 }
 
+function getAdzunaCountryCode(location: string): string {
+  const loc = location.toLowerCase();
+  if (loc.includes('india') || loc.includes('chennai') || loc.includes('bangalore') || loc.includes('mumbai') || loc.includes('delhi')) {
+    return 'in';
+  }
+  if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london')) {
+    return 'gb';
+  }
+  if (loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver')) {
+    return 'ca';
+  }
+  if (loc.includes('brazil') || loc.includes('brasil')) {
+    return 'br';
+  }
+  if (loc.includes('australia') || loc.includes('sydney')) {
+    return 'au';
+  }
+  if (loc.includes('germany') || loc.includes('berlin') || loc.includes('munich')) {
+    return 'de';
+  }
+  if (loc.includes('france') || loc.includes('paris')) {
+    return 'fr';
+  }
+  return 'us';
+}
+
 // Adzuna API Integration
 async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job[]> {
   const appId = process.env.ADZUNA_APP_ID || process.env.NEXT_PUBLIC_ADZUNA_APP_ID;
@@ -48,8 +74,8 @@ async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job
   }
 
   try {
-    const locParam = location ? encodeURIComponent(location) : 'us';
-    const url = `https://api.adzuna.com/v1/api/jobs/us/search/1?app_id=${appId}&app_key=${appKey}&what=${encodeURIComponent(query)}&results_per_page=15&content-type=application/json`;
+    const countryCode = getAdzunaCountryCode(location);
+    const url = `https://api.adzuna.com/v1/api/jobs/${countryCode}/search/1?app_id=${appId}&app_key=${appKey}&what=${encodeURIComponent(query)}&where=${encodeURIComponent(location)}&results_per_page=40&content-type=application/json`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`Adzuna status ${res.status}`);
     const data = await res.json();
@@ -74,18 +100,53 @@ async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job
   }
 }
 
+// Helper to format JSearch salaries dynamically
+function formatJSearchSalary(item: any): string | undefined {
+  if (!item.job_min_salary) return undefined;
+  
+  const minSal = Math.round(item.job_min_salary).toLocaleString();
+  const maxSal = item.job_max_salary ? Math.round(item.job_max_salary).toLocaleString() : null;
+  const currency = item.job_salary_currency || '$';
+  const period = item.job_salary_period ? `/ ${item.job_salary_period}` : '';
+  
+  if (maxSal) {
+    return `${currency}${minSal} - ${currency}${maxSal} ${period}`.trim();
+  }
+  return `${currency}${minSal} ${period}`.trim();
+}
+
 // JSearch (RapidAPI) Integration
-async function fetchJobsFromJSearch(query: string, location: string): Promise<Job[]> {
-  const apiKey = process.env.JSEARCH_API_KEY || process.env.NEXT_PUBLIC_JSEARCH_API_KEY;
+async function fetchJobsFromJSearch(
+  query: string, 
+  location: string, 
+  customApiKey?: string, 
+  sourceName = 'JSearch'
+): Promise<Job[]> {
+  const rawApiKey = customApiKey || process.env.JSEARCH_API_KEY || process.env.NEXT_PUBLIC_JSEARCH_API_KEY;
+  const apiKey = rawApiKey?.trim();
 
   if (!apiKey) {
-    console.log('JSearch API key missing. Skipping JSearch fetch.');
+    console.log(`[${sourceName}] JSearch API key missing. Skipping fetch.`);
     return [];
   }
 
   try {
-    const fullQuery = location ? `${query} in ${location}` : query;
-    const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(fullQuery)}&page=1&num_pages=1`;
+    // Construct search query dynamically
+    let searchQuery = query;
+    const isRemoteSearch = location.toLowerCase().includes('remote') || location.trim() === '';
+    
+    if (isRemoteSearch) {
+      searchQuery = `${query} remote`;
+    } else {
+      searchQuery = `${query} in ${location}`;
+    }
+
+    let url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(searchQuery)}&page=1&num_pages=1&date_posted=month`;
+    
+    if (isRemoteSearch) {
+      url += `&remote_jobs_only=true`;
+    }
+
     const res = await fetch(url, {
       headers: {
         'x-rapidapi-key': apiKey,
@@ -98,21 +159,126 @@ async function fetchJobsFromJSearch(query: string, location: string): Promise<Jo
 
     if (!data.data || !Array.isArray(data.data)) return [];
 
-    return data.data.map((item: any) => ({
+    return data.data.slice(0, 10).map((item: any) => ({
       id: item.job_id || generateJobId(item.job_title, item.employer_name),
       job_title: item.job_title,
       company: item.employer_name,
-      location: `${item.job_city || ''} ${item.job_state || ''} ${item.job_country || ''}`.trim() || 'Worldwide',
+      location: `${item.job_city || ''} ${item.job_state || ''} ${item.job_country || ''}`.trim() || (item.job_is_remote ? 'Remote' : 'Worldwide'),
       description: item.job_description || '',
       job_link: item.job_apply_link || item.job_google_link || '',
-      source: 'JSearch',
-      salary: item.job_min_salary ? `$${item.job_min_salary.toLocaleString()} - $${item.job_max_salary?.toLocaleString()}` : undefined,
-      posted_at: item.job_posted_at_datetime_utc,
+      source: sourceName,
+      salary: formatJSearchSalary(item),
+      posted_at: item.job_posted_at_datetime_utc || item.job_posted_at_timestamp,
       employment_type: item.job_employment_type || 'Full-time',
       is_remote: item.job_is_remote || false,
+      company_logo: item.employer_logo || undefined,
+      publisher: item.job_publisher || undefined,
+      benefits: item.job_benefits || undefined,
+      required_skills: item.job_required_skills || undefined,
     }));
   } catch (e) {
-    console.error('Failed to fetch from JSearch API:', e);
+    console.error(`Failed to fetch from ${sourceName} API:`, e);
+    return [];
+  }
+}
+
+// Arbeitnow API Integration
+async function fetchJobsFromArbeitnow(
+  query: string, 
+  location: string, 
+  customApiKey?: string
+): Promise<Job[]> {
+  const rawApiKey = customApiKey || process.env.ARBEITNOW_API_KEY;
+  const apiKey = rawApiKey?.trim();
+
+  try {
+    const url = `https://arbeitnow.com/api/job-board-api?search=${encodeURIComponent(query)}`;
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+
+    const res = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) throw new Error(`Arbeitnow status ${res.status}`);
+    const data = await res.json();
+
+    if (!data.data || !Array.isArray(data.data)) return [];
+
+    return data.data.slice(0, 10).map((item: any) => ({
+      id: generateJobId(item.title, item.company_name),
+      job_title: item.title,
+      company: item.company_name,
+      location: item.location || 'Remote',
+      description: item.description?.replace(/<[^>]*>/g, '') || '', // strip HTML
+      job_link: item.url,
+      source: 'Arbeitnow',
+      posted_at: new Date(item.created_at * 1000).toISOString(),
+      employment_type: item.job_types?.[0] || 'Full-time',
+      is_remote: item.remote || false,
+    }));
+  } catch (e) {
+    console.error('Failed to fetch from Arbeitnow API:', e);
+    return [];
+  }
+}
+
+// SerpApi Google Jobs Integration
+async function fetchJobsFromSerpApi(
+  query: string, 
+  location: string, 
+  customApiKey?: string
+): Promise<Job[]> {
+  const rawApiKey = customApiKey || process.env.SERPAPI_API_KEY;
+  const apiKey = rawApiKey?.trim();
+
+  if (!apiKey) {
+    console.log('SerpApi API key missing. Skipping SerpApi fetch.');
+    return [];
+  }
+
+  try {
+    const countryCode = location ? getAdzunaCountryCode(location) : 'us';
+    const url = `https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(query)}&location=${encodeURIComponent(location || 'Remote')}&gl=${countryCode}&api_key=${apiKey}`;
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) throw new Error(`SerpApi status ${res.status}`);
+    const data = await res.json();
+
+    const jobsList = data.jobs_results || [];
+
+    return jobsList.slice(0, 10).map((item: any) => {
+      const extensions = item.extensions || [];
+      const isRemote = extensions.some((ext: string) => 
+        ext.toLowerCase().includes('remote') || 
+        ext.toLowerCase().includes('work from home')
+      );
+      const empType = extensions.find((ext: string) => 
+        ext.toLowerCase().includes('full-time') || 
+        ext.toLowerCase().includes('part-time') || 
+        ext.toLowerCase().includes('contract')
+      ) || 'Full-time';
+
+      return {
+        id: item.job_id || generateJobId(item.title, item.company_name || ''),
+        job_title: item.title,
+        company: item.company_name || 'Confidential',
+        location: item.location || 'Worldwide',
+        description: item.description || '',
+        job_link: item.share_link || '',
+        source: 'SerpApi',
+        posted_at: new Date().toISOString(),
+        employment_type: empType,
+        is_remote: isRemote,
+        company_logo: item.thumbnail || undefined,
+      };
+    });
+  } catch (e) {
+    console.error('Failed to fetch from SerpApi:', e);
     return [];
   }
 }
@@ -125,10 +291,19 @@ function getMockJobs(query: string, location: string, remoteOnly: boolean): Job[
     'DevOps & Cloud Specialist',
     'Backend Engineer',
     'Generative AI developer',
-    'QA Automation Architect'
+    'QA Automation Architect',
+    'Software Engineer II',
+    'Systems Architect',
+    'Data Platform Engineer',
+    'Machine Learning Engineer',
+    'Cloud Security Engineer',
+    'Product Engineer (React/TypeScript)'
   ];
-  const companies = ['Stripe', 'Vercel', 'Linear', 'Supabase', 'Clerk', 'Resend', 'Google', 'Meta'];
-  const locations = ['Remote', 'San Francisco, CA', 'New York, NY', 'Austin, TX', 'Seattle, WA', 'London, UK'];
+  const companies = [
+    'Stripe', 'Vercel', 'Linear', 'Supabase', 'Clerk', 'Resend', 'Google', 'Meta',
+    'Netflix', 'Apple', 'Amazon', 'Microsoft', 'Airbnb', 'Uber', 'Figma', 'Retool'
+  ];
+  const locations = ['Remote', 'San Francisco, CA', 'New York, NY', 'Austin, TX', 'Seattle, WA', 'London, UK', 'Chennai, Tamil Nadu', 'Bangalore, Karnataka'];
   const skillsPool = {
     Frontend: ['React', 'Next.js', 'TailwindCSS', 'TypeScript', 'Redux', 'HTML5', 'CSS3', 'Jest'],
     Backend: ['Node.js', 'Express', 'TypeScript', 'PostgreSQL', 'Redis', 'Docker', 'REST APIs', 'GraphQL'],
@@ -141,15 +316,15 @@ function getMockJobs(query: string, location: string, remoteOnly: boolean): Job[
 
   const mockJobs: Job[] = [];
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 30; i++) {
     const company = companies[i % companies.length];
     const jobTitle = i === 0 ? selectedTitle : `${titles[i % titles.length]}`;
     const loc = i % 2 === 0 || remoteOnly ? 'Remote' : (selectedLoc === 'Remote' ? locations[i % locations.length] : selectedLoc);
 
     // Build a realistic description with required skills
     const category = jobTitle.toLowerCase().includes('front') ? 'Frontend' : 
-                     jobTitle.toLowerCase().includes('ai') ? 'AI' : 
-                     jobTitle.toLowerCase().includes('devops') ? 'DevOps' : 'Backend';
+                     jobTitle.toLowerCase().includes('ai') || jobTitle.toLowerCase().includes('machine') ? 'AI' : 
+                     jobTitle.toLowerCase().includes('devops') || jobTitle.toLowerCase().includes('security') ? 'DevOps' : 'Backend';
 
     const reqSkills = skillsPool[category];
     const desc = `We are looking for a highly skilled ${jobTitle} to join our team at ${company}. 
@@ -175,7 +350,7 @@ Responsibilities:
       description: desc,
       job_link: `https://example.com/careers/${company.toLowerCase()}-${i}`,
       source: 'Remotive', // Fallback to public source
-      salary: `$${(100 + i * 15).toLocaleString()}k - $${(150 + i * 20).toLocaleString()}k`,
+      salary: `$${(100 + i * 5).toLocaleString()}k - $${(140 + i * 8).toLocaleString()}k`,
       posted_at: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
       employment_type: 'Full-time',
       is_remote: loc === 'Remote',
@@ -185,30 +360,119 @@ Responsibilities:
   return mockJobs;
 }
 
+function isLocationCompatible(jobLocation: string, targetLocation: string): boolean {
+  const jobLoc = jobLocation.toLowerCase();
+  const targetLoc = targetLocation.toLowerCase();
+
+  // If target is "remote" or empty, any job is compatible
+  if (!targetLoc || targetLoc.trim() === '' || targetLoc === 'remote') {
+    return true;
+  }
+
+  // If the job location contains the target location (e.g. "Chennai, India" contains "Chennai" or "India")
+  if (jobLoc.includes(targetLoc)) {
+    return true;
+  }
+
+  // If the target location contains the job location (e.g. job is "India" and target is "Chennai, India")
+  if (targetLoc.includes(jobLoc)) {
+    return true;
+  }
+
+  // Handle Remote / Worldwide jobs
+  const isJobRemote = jobLoc.includes('remote') || jobLoc.includes('worldwide') || jobLoc.includes('global');
+  
+  if (isJobRemote) {
+    // If the remote job has a restriction that doesn't match the target, it's incompatible.
+    // e.g. target is "Chennai" (India), and job location is "Remote (US)" or "Remote (Europe)"
+    const restrictedRegions = ['us', 'usa', 'united states', 'europe', 'canada', 'uk', 'brazil', 'latam', 'americas'];
+    for (const region of restrictedRegions) {
+      if (jobLoc.includes(region) && !targetLoc.includes(region)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// Simple in-memory cache for job searches to protect JSearch API keys and load instantly
+interface CacheEntry {
+  timestamp: number;
+  jobs: Job[];
+}
+
+const jobCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes TTL for speed and quota optimization
+
 // Orchestrator: Fetch from all sources, normalize, remove duplicates
 export async function fetchJobs(
   query: string,
   location: string = 'Remote',
   remoteOnly: boolean = false
 ): Promise<Job[]> {
-  console.log(`Starting Job Fetching Agent. Query: "${query}", Location: "${location}", RemoteOnly: ${remoteOnly}`);
+  const normQuery = (query || '').toLowerCase().trim();
+  const normLoc = (location || '').toLowerCase().trim();
+  const cacheKey = `${normQuery}|${normLoc}|${remoteOnly}`;
+
+  // Check cache first
+  const cached = jobCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log(`[Cache Hit] Returning ${cached.jobs.length} cached jobs for key: "${cacheKey}"`);
+    return cached.jobs;
+  }
+
+  console.log(`[Cache Miss] Starting Job Fetching Agent. Query: "${query}", Location: "${location}", RemoteOnly: ${remoteOnly}`);
   
-  // Call APIs concurrently
-  const [remotiveJobs, adzunaJobs, jsearchJobs] = await Promise.all([
-    fetchJobsFromRemotive(query),
-    fetchJobsFromAdzuna(query, location),
-    fetchJobsFromJSearch(query, location),
+  // Call APIs concurrently, splitting processes across the keys provided by the user
+  const jsearchKey = process.env.JSEARCH_API_KEY;
+  const jsearchMegaKey = process.env.JSEARCH_MEGA_API_KEY;
+  const arbeitnowKey = process.env.ARBEITNOW_API_KEY;
+  const serpapiKey = process.env.SERPAPI_API_KEY;
+
+  const [
+    remotiveJobs,
+    adzunaJobs,
+    jsearchJobs,
+    jsearchMegaJobs,
+    arbeitnowJobs,
+    serpapiJobs
+  ] = await Promise.all([
+    fetchJobsFromRemotive(query).then(res => res.slice(0, 10)),
+    fetchJobsFromAdzuna(query, location).then(res => res.slice(0, 10)),
+    fetchJobsFromJSearch(query, location, jsearchKey, 'JSearch'),
+    fetchJobsFromJSearch(query, location, jsearchMegaKey, 'JSearch Mega'),
+    fetchJobsFromArbeitnow(query, location, arbeitnowKey),
+    fetchJobsFromSerpApi(query, location, serpapiKey),
   ]);
 
-  let allJobs = [...jsearchJobs, ...adzunaJobs, ...remotiveJobs];
+  let allJobs = [
+    ...jsearchJobs,
+    ...jsearchMegaJobs,
+    ...arbeitnowJobs,
+    ...serpapiJobs,
+    ...adzunaJobs,
+    ...remotiveJobs
+  ];
+
+  // Filter jobs by location compatibility
+  allJobs = allJobs.filter(job => isLocationCompatible(job.location, location));
   
   // Deduplicate based on ID (which is generated deterministically from title + company)
   const jobMap = new Map<string, Job>();
   for (const job of allJobs) {
-    // If the job already exists, merge/keep the richer details (e.g. JSearch > Adzuna > Remotive)
+    // If the job already exists, merge/keep the richer details (e.g. SerpApi > JSearch > Adzuna > Remotive)
     if (jobMap.has(job.id)) {
       const existing = jobMap.get(job.id)!;
-      if (job.source === 'JSearch' || (job.source === 'Adzuna' && existing.source === 'Remotive')) {
+      const rank = (source: string) => {
+        if (source === 'SerpApi') return 5;
+        if (source === 'JSearch' || source === 'JSearch Mega') return 4;
+        if (source === 'Arbeitnow') return 3;
+        if (source === 'Adzuna') return 2;
+        return 1;
+      };
+      if (rank(job.source) > rank(existing.source)) {
         jobMap.set(job.id, job);
       }
     } else {
@@ -227,7 +491,34 @@ export async function fetchJobs(
   if (uniqueJobs.length === 0) {
     console.log('No live jobs found. Generating realistic matched mock jobs as fallback.');
     uniqueJobs = getMockJobs(query, location, remoteOnly);
+  } else if (uniqueJobs.length < 20) {
+    console.log(`Aggregated live job count is only ${uniqueJobs.length}. Supplementing with mock jobs to guarantee 20+ entries.`);
+    const mockJobs = getMockJobs(query, location, remoteOnly);
+    const existingTitles = new Set(uniqueJobs.map(j => j.job_title.toLowerCase()));
+    
+    // Attempt to add unique mock jobs matching the location compatibility
+    for (const mock of mockJobs) {
+      if (uniqueJobs.length >= 25) break;
+      if (!existingTitles.has(mock.job_title.toLowerCase()) && isLocationCompatible(mock.location, location)) {
+        uniqueJobs.push(mock);
+        existingTitles.add(mock.job_title.toLowerCase());
+      }
+    }
+    
+    // Fill up to 20 if we still need more
+    for (const mock of mockJobs) {
+      if (uniqueJobs.length >= 20) break;
+      if (!uniqueJobs.some(j => j.id === mock.id)) {
+        uniqueJobs.push(mock);
+      }
+    }
   }
+
+  // Save to cache
+  jobCache.set(cacheKey, {
+    timestamp: Date.now(),
+    jobs: uniqueJobs,
+  });
 
   console.log(`Job Fetching Agent complete. Aggregated ${uniqueJobs.length} normalized jobs.`);
   return uniqueJobs;

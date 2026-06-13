@@ -46,6 +46,50 @@ export default function JobDashboard() {
   const [remoteOnly, setRemoteOnly] = React.useState(true);
   const [isParsing, setIsParsing] = React.useState(false);
   const [isMatching, setIsMatching] = React.useState(false);
+  const [isMounted, setIsMounted] = React.useState(false);
+  const [showResetModal, setShowResetModal] = React.useState(false);
+
+  // Load from localStorage on mount
+  React.useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_form_data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.resumeText) setResumeText(parsed.resumeText);
+          if (parsed.fileName) setFileName(parsed.fileName);
+          if (parsed.targetJobTitle) setJobTitle(parsed.targetJobTitle);
+          if (parsed.targetLocation) setLocation(parsed.targetLocation);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }, []);
+
+  // Sync state back to localStorage, only after mounting
+  React.useEffect(() => {
+    if (isMounted && typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_form_data');
+      let currentData: any = {};
+      if (saved) {
+        try {
+          currentData = JSON.parse(saved);
+        } catch (e) {
+          // ignore
+        }
+      }
+      const dataToSave = {
+        ...currentData,
+        resumeText: resumeText || '',
+        targetJobTitle: jobTitle || '',
+        targetLocation: location || '',
+        fileName: fileName,
+      };
+      localStorage.setItem('nexus_form_data', JSON.stringify(dataToSave));
+    }
+  }, [resumeText, jobTitle, location, fileName, isMounted]);
 
   // Data State
   const [stats, setStats] = React.useState<DashboardStats>({
@@ -62,7 +106,7 @@ export default function JobDashboard() {
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   // Fetch Dashboard Stats & Match History
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (forceSelectFirst?: boolean) => {
     setIsLoadingData(true);
     try {
       const res = await fetch('/api/jobs');
@@ -72,16 +116,20 @@ export default function JobDashboard() {
         setStats(data.stats);
         setMatches(data.matches);
         setLatestAnalysis(data.latestAnalysis || null);
-        if (data.matches.length > 0 && !selectedMatch) {
-          setSelectedMatch(data.matches[0]);
+        if (data.matches.length > 0) {
+          if (forceSelectFirst || !selectedMatch) {
+            setSelectedMatch(data.matches[0]);
+          }
+        } else {
+          setSelectedMatch(null);
         }
       }
     } catch (err) {
       console.error(err);
       toast({
         variant: 'destructive',
-        title: 'Error loading dashboard',
-        description: 'Failed to retrieve stats. Please refresh.',
+        title: 'Spell of Scrying Failed',
+        description: 'We could not summon the dashboard statistics. Cast Refresh to try again.',
       });
     } finally {
       setIsLoadingData(false);
@@ -94,15 +142,15 @@ export default function JobDashboard() {
 
   // Clear History Handler
   const handleClearHistory = async () => {
-    if (!confirm('Are you sure you want to clear your job matching history? This cannot be undone.')) return;
+    setShowResetModal(false);
     try {
       const res = await fetch('/api/jobs?action=clear');
       if (!res.ok) throw new Error('Clear failed');
       const data = await res.json();
       if (data.success) {
         toast({
-          title: 'History Cleared',
-          description: 'All matching history and analytics have been reset.',
+          title: 'Ritual of Oblivion Complete',
+          description: 'All records of your past quests and matched scrolls have been reduced to ash.',
         });
         setMatches([]);
         setSelectedMatch(null);
@@ -118,8 +166,8 @@ export default function JobDashboard() {
     } catch (err) {
       toast({
         variant: 'destructive',
-        title: 'Clear failed',
-        description: 'Something went wrong while clearing history.',
+        title: 'Counterspell Blocked Ritual',
+        description: 'The spell of clearing history was disrupted by an unknown force.',
       });
     }
   };
@@ -154,18 +202,18 @@ export default function JobDashboard() {
 
         setResumeText(fullText);
         setFileName(file.name);
-        toast({ title: 'PDF Parsed Successfully', description: `${file.name} loaded into the engine.` });
+        toast({ title: 'Rune Scroll Deciphered', description: `${file.name} loaded into the engine.` });
       } else if (file.type === 'text/plain') {
         const text = await file.text();
         setResumeText(text);
         setFileName(file.name);
-        toast({ title: 'Plaintext Loaded', description: `${file.name} loaded into the engine.` });
+        toast({ title: 'Parchment Text Absorbed', description: `${file.name} loaded into the engine.` });
       } else {
-        toast({ variant: 'destructive', title: 'Invalid File', description: 'Please upload PDF or TXT.' });
+        toast({ variant: 'destructive', title: 'Forbidden Artifact', description: 'Please upload PDF or TXT.' });
       }
     } catch (error) {
       console.error(error);
-      toast({ variant: 'destructive', title: 'Parsing Error', description: 'Could not extract text. Try pasting directly.' });
+      toast({ variant: 'destructive', title: 'Translation Curse', description: 'Could not extract meaning from the scroll. Try pasting your runes directly.' });
     } finally {
       setIsParsing(false);
       if (event.target) event.target.value = '';
@@ -179,12 +227,12 @@ export default function JobDashboard() {
       if (text) {
         setResumeText(text);
         setFileName('Pasted Resume Text');
-        toast({ title: 'Resume Pasted', description: 'Content successfully read from clipboard.' });
+        toast({ title: 'Clipboard Attuned', description: 'Content successfully read from clipboard.' });
       } else {
-        toast({ variant: 'destructive', title: 'Clipboard Empty', description: 'Please copy your resume text first.' });
+        toast({ variant: 'destructive', title: 'Vessel Empty', description: 'Please copy your resume text first.' });
       }
     } catch (e) {
-      toast({ variant: 'destructive', title: 'Clipboard Blocked', description: 'Please grant clipboard permissions or paste manually.' });
+      toast({ variant: 'destructive', title: 'Aura of Shielding', description: 'Please grant clipboard permissions or paste manually.' });
     }
   };
 
@@ -192,12 +240,15 @@ export default function JobDashboard() {
   const handleRunMatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resumeText.trim()) {
-      toast({ variant: 'destructive', title: 'Resume Required', description: 'Please upload or paste your resume content.' });
+      toast({ variant: 'destructive', title: 'No Runes Found', description: 'You must provide a resume text scroll before starting the match.' });
       return;
     }
 
     setIsMatching(true);
-    toast({ title: 'Launching Multi-Agent Orchestrator', description: 'Executing LangGraph StateGraph agents...' });
+    toast({ 
+      title: 'Summoning the Conclave of Agents', 
+      description: 'Chanting the LangGraph incantations to trace your path through the job cosmos...' 
+    });
 
     try {
       const res = await fetchAndMatchJobsAction(
@@ -209,23 +260,23 @@ export default function JobDashboard() {
 
       if (res.success && res.result) {
         toast({
-          title: 'Intelligence Analysis Complete!',
-          description: `Successfully executed multi-agent workflow. Loaded live matches and market trends.`,
+          title: 'Conclave Harmonized!',
+          description: `The multi-agent spirits have mapped your path, revealing target matches and market alchemy.`,
         });
-        await loadDashboardData(); // Reload stats and results
+        await loadDashboardData(true); // Reload stats and results
         setActiveTab('matches'); // Switch to matches view
       } else {
         toast({
           variant: 'destructive',
-          title: 'Matching Failed',
-          description: res.error || 'Failed to execute orchestrator.',
+          title: 'Conclave Disrupted',
+          description: res.error || 'The agent spirits grew silent. Ritual aborted.',
         });
       }
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'System Error',
-        description: err.message || 'An unexpected error occurred.',
+        title: 'Wild Magic Surge (Error)',
+        description: err.message || 'The matching vessel fractured unexpectedly.',
       });
     } finally {
       setIsMatching(false);
@@ -465,7 +516,7 @@ export default function JobDashboard() {
                     type="button" 
                     variant="ghost" 
                     className="w-full text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/10 h-9"
-                    onClick={handleClearHistory}
+                    onClick={() => setShowResetModal(true)}
                   >
                     <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                     Reset Match Analytics
@@ -576,18 +627,34 @@ export default function JobDashboard() {
                         <div
                           key={item.job_id}
                           onClick={() => setSelectedMatch(item)}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 flex flex-col gap-2 ${
+                          className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 flex flex-col gap-2.5 ${
                             isSelected 
                               ? 'border-indigo-500 bg-indigo-950/20 shadow-[0_0_12px_rgba(99,102,241,0.1)]' 
                               : 'border-slate-800 bg-slate-900/20 hover:border-slate-700 hover:bg-slate-900/40'
                           }`}
                         >
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="space-y-0.5 max-w-[70%]">
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{item.company}</p>
-                              <h4 className="font-bold text-sm text-foreground line-clamp-1">{item.job_title}</h4>
+                          <div className="flex justify-between items-start gap-2.5">
+                            <div className="flex gap-2.5 items-start overflow-hidden min-w-0">
+                              {item.company_logo ? (
+                                <img 
+                                  src={item.company_logo} 
+                                  alt={item.company} 
+                                  className="h-9 w-9 rounded-lg object-contain bg-slate-950 border border-slate-800/80 p-1 shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="h-9 w-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                  <Briefcase className="h-4.5 w-4.5" />
+                                </div>
+                              )}
+                              <div className="space-y-0.5 min-w-0">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{item.company}</p>
+                                <h4 className="font-bold text-sm text-foreground line-clamp-1">{item.job_title}</h4>
+                              </div>
                             </div>
-                            <span className={`text-base font-extrabold shrink-0 ${scoreColor}`}>
+                            <span className={`text-base font-extrabold shrink-0 mt-0.5 ${scoreColor}`}>
                               {item.score}%
                             </span>
                           </div>
@@ -608,21 +675,75 @@ export default function JobDashboard() {
                   <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md h-full flex flex-col justify-between">
                     <div>
                       <CardHeader className="border-b border-slate-800/80 p-6 flex flex-row justify-between items-start gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-400">
-                            <Briefcase className="h-3.5 w-3.5" />
-                            {selectedMatch.company}
-                          </div>
-                          <CardTitle className="text-xl font-bold text-foreground leading-tight">{selectedMatch.job_title}</CardTitle>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            <span>{selectedMatch.location}</span>
+                        <div className="flex gap-3.5 items-start overflow-hidden min-w-0">
+                          {selectedMatch.company_logo ? (
+                            <img 
+                              src={selectedMatch.company_logo} 
+                              alt={selectedMatch.company} 
+                              className="h-12 w-12 rounded-xl object-contain bg-slate-950 border border-slate-800 p-1.5 shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                              <Briefcase className="h-6 w-6" />
+                            </div>
+                          )}
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-400">
+                              {selectedMatch.company}
+                            </div>
+                            <CardTitle className="text-xl font-bold text-foreground leading-tight">{selectedMatch.job_title}</CardTitle>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-0.5">
+                              <MapPin className="h-3.5 w-3.5" />
+                              <span>{selectedMatch.location}</span>
+                            </div>
                           </div>
                         </div>
                         {renderCircleScore(selectedMatch.score, 65, 5)}
                       </CardHeader>
 
-                      <CardContent className="p-6 space-y-6 max-h-[420px] overflow-y-auto scrollbar-hide">
+                      <CardContent className="p-6 space-y-5 max-h-[420px] overflow-y-auto scrollbar-hide">
+                        {/* Job Details Meta Badges */}
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 pb-4 border-b border-slate-800/40 text-xs">
+                          {selectedMatch.salary && (
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Salary Package</span>
+                              <p className="font-semibold text-emerald-400">{selectedMatch.salary}</p>
+                            </div>
+                          )}
+                          {selectedMatch.employment_type && (
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Job Type</span>
+                              <p className="font-semibold text-slate-300">{selectedMatch.employment_type}</p>
+                            </div>
+                          )}
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Publisher</span>
+                            <p className="font-semibold text-indigo-400">
+                              {selectedMatch.publisher || (selectedMatch.job_link.includes('indeed') ? 'Indeed' : 
+                               selectedMatch.job_link.includes('linkedin') ? 'LinkedIn' : 
+                               selectedMatch.job_link.includes('ziprecruiter') ? 'ZipRecruiter' : 
+                               selectedMatch.job_link.includes('glassdoor') ? 'Glassdoor' : 'JSearch Feed')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Key Benefits */}
+                        {selectedMatch.benefits && selectedMatch.benefits.length > 0 && (
+                          <div className="space-y-2">
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Benefits & Perks</h5>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedMatch.benefits.map((b, idx) => (
+                                <Badge key={idx} variant="outline" className="bg-indigo-950/10 border-indigo-900/30 text-indigo-300 text-[10px] px-2 py-0.5">
+                                  {b}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Engine Reasoning */}
                         <div className="relative bg-indigo-950/20 p-5 rounded-xl border border-indigo-900/40">
                           <Lightbulb className="absolute -top-2.5 -left-2.5 h-6.5 w-6.5 text-indigo-400 bg-slate-950 rounded-full p-1 border border-indigo-900/40" />
@@ -914,7 +1035,7 @@ export default function JobDashboard() {
                       className="text-[11px] h-8 border-slate-700 hover:bg-slate-800"
                       onClick={() => {
                         navigator.clipboard.writeText(latestAnalysis.recommendations.applicationStrategy);
-                        toast({ title: 'Template Copied', description: 'Outreach strategy text written to clipboard.' });
+                         toast({ title: 'Spell Copied', description: 'The outreach incantation has been bound to your clipboard.' });
                       }}
                     >
                       <Clipboard className="mr-1.5 h-3.5 w-3.5" />
@@ -959,59 +1080,101 @@ export default function JobDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-4">
-                    {latestAnalysis.logs.map((log, idx) => {
-                      const isSuccess = log.status === 'success';
-                      const isFailed = log.status === 'failed';
-                      const isRetry = log.status === 'retry';
+                    {(() => {
+                      interface CustomTraceLog {
+                        agentName: string;
+                        status: 'pending' | 'success' | 'retry' | 'failed';
+                        message: string;
+                        timestamp: string;
+                        confidence?: number;
+                        durationMs?: number;
+                      }
                       
-                      let statusColor = 'text-indigo-400 bg-indigo-950/30 border-indigo-900/50';
-                      let StatusIcon = Loader2;
-                      if (isSuccess) {
-                        statusColor = 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50';
-                        StatusIcon = CheckCircle2;
-                      } else if (isFailed) {
-                        statusColor = 'text-rose-400 bg-rose-950/30 border-rose-900/50';
-                        StatusIcon = XCircle;
-                      } else if (isRetry) {
-                        statusColor = 'text-amber-400 bg-amber-950/30 border-amber-900/50';
-                        StatusIcon = RefreshCw;
+                      const latestLogsMap = new Map<string, CustomTraceLog>();
+                      for (const log of latestAnalysis.logs) {
+                        const existing = latestLogsMap.get(log.agentName);
+                        // Update if:
+                        // 1. Not set yet
+                        // 2. The new log has a final status ('success' or 'failed')
+                        // 3. Or it's a newer retry/pending and the existing status isn't 'success'/'failed'
+                        if (
+                          !existing || 
+                          log.status === 'success' || 
+                          log.status === 'failed' || 
+                          (existing.status !== 'success' && existing.status !== 'failed')
+                        ) {
+                          latestLogsMap.set(log.agentName, log as CustomTraceLog);
+                        }
                       }
 
-                      return (
-                        <div 
-                          key={idx} 
-                          className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/40 border-slate-900 hover:border-slate-800 transition-all`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg border shrink-0 mt-0.5 ${statusColor}`}>
-                              <StatusIcon className={`h-4.5 w-4.5 ${isRetry || log.status === 'pending' ? 'animate-spin' : ''}`} />
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-bold text-xs text-foreground">{log.agentName} Agent</span>
-                                <span className={`text-[9px] uppercase px-1.5 py-0.25 rounded border font-bold ${statusColor}`}>
-                                  {log.status}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-foreground leading-relaxed">{log.message}</p>
-                            </div>
-                          </div>
+                      const orderedAgents = [
+                        'ResumeParser',
+                        'JobFetcher',
+                        'MarketAnalyzer',
+                        'OpportunityRanker',
+                        'ResumeOptimizer',
+                        'RecommendationGenerator',
+                        'OrchestratorRecovery'
+                      ];
 
-                          <div className="flex items-center gap-4 shrink-0 pl-11 md:pl-0 text-[10px] text-muted-foreground font-mono">
-                            {log.durationMs !== undefined && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3.5 w-3.5" /> { (log.durationMs / 1000).toFixed(2) }s
-                              </span>
-                            )}
-                            {log.confidence !== undefined && log.confidence > 0 && (
-                              <span className="flex items-center gap-1 font-bold text-slate-300">
-                                <Award className="h-3.5 w-3.5" /> { Math.round(log.confidence * 100) }% conf
-                              </span>
-                            )}
+                      const displayLogs = orderedAgents
+                        .map(name => latestLogsMap.get(name))
+                        .filter(Boolean) as CustomTraceLog[];
+
+                      return displayLogs.map((log, idx) => {
+                        const isSuccess = log.status === 'success';
+                        const isFailed = log.status === 'failed';
+                        const isRetry = log.status === 'retry';
+                        
+                        let statusColor = 'text-indigo-400 bg-indigo-950/30 border-indigo-900/50';
+                        let StatusIcon = Loader2;
+                        if (isSuccess) {
+                          statusColor = 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50';
+                          StatusIcon = CheckCircle2;
+                        } else if (isFailed) {
+                          statusColor = 'text-rose-400 bg-rose-950/30 border-rose-900/50';
+                          StatusIcon = XCircle;
+                        } else if (isRetry) {
+                          statusColor = 'text-amber-400 bg-amber-950/30 border-amber-900/50';
+                          StatusIcon = RefreshCw;
+                        }
+
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/40 border-slate-900 hover:border-slate-800 transition-all`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`p-2 rounded-lg border shrink-0 mt-0.5 ${statusColor}`}>
+                                <StatusIcon className={`h-4.5 w-4.5 ${isRetry || log.status === 'pending' ? 'animate-spin' : ''}`} />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-bold text-xs text-foreground">{log.agentName} Agent</span>
+                                  <span className={`text-[9px] uppercase px-1.5 py-0.25 rounded border font-bold ${statusColor}`}>
+                                    {log.status}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">{log.message}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 shrink-0 pl-11 md:pl-0 text-[10px] text-muted-foreground font-mono">
+                              {log.durationMs !== undefined && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" /> { (log.durationMs / 1000).toFixed(2) }s
+                                </span>
+                              )}
+                              {log.confidence !== undefined && log.confidence > 0 && (
+                                <span className="flex items-center gap-1 font-bold text-slate-300">
+                                  <Award className="h-3.5 w-3.5" /> { Math.round(log.confidence * 100) }% conf
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -1021,6 +1184,42 @@ export default function JobDashboard() {
         </div>
 
       </div>
+
+      {/* Custom Fantasy Reset Confirm Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full overflow-hidden shadow-[0_0_50px_rgba(244,63,94,0.15)] animate-in zoom-in-95 duration-200">
+            <div className="p-6 space-y-6">
+              <div className="flex items-center gap-3 text-rose-400">
+                <div className="p-2 bg-rose-500/10 border border-rose-500/25 rounded-lg">
+                  <Trash2 className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-extrabold text-foreground">Cast Spell of Oblivion?</h3>
+              </div>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Are you sure you want to cast the ritual of obliteration? All matching history scrolls, career paths, and agent telemetry will be turned to ash and lost in the void forever.
+              </p>
+              <div className="flex gap-3 justify-end pt-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowResetModal(false)}
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800/40 text-xs font-bold"
+                >
+                  Abort Ritual
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={handleClearHistory}
+                  className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-900/30"
+                >
+                  Incinerate History
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

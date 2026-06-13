@@ -9,6 +9,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { generateStructuredOutput } from '@/lib/llm-client';
 
 const FindRelatedJobsInputSchema = z.object({
   targetJobTitle: z.string().describe('The target job title for the candidate.'),
@@ -20,7 +21,7 @@ const RelatedJobSchema = z.object({
   job_title: z.string().describe('The title of the related job.'),
   company: z.string().describe('The company offering the related job.'),
   location: z.string().describe('The location of the related job.'),
-  job_link: z.string().url().describe('URL to the related job listing.'),
+  job_link: z.string().url().catch('https://example.com/jobs').describe('URL to the related job listing.'),
 });
 
 const FindRelatedJobsOutputSchema = z.object({
@@ -62,7 +63,21 @@ const findRelatedJobsFlow = ai.defineFlow(
     outputSchema: FindRelatedJobsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    const promptText = `You are a Related Jobs Agent. Your task is to generate a list of at least four realistic (but can be fictional) job opportunities based on the provided target job title and location.
+  
+    Target Job Title: ${input.targetJobTitle}
+    Target Location: ${input.targetLocation}
+  
+    Instructions:
+    - Generate a list of at least four related jobs.
+    - The jobs should be realistic for the given title and location.
+    - Provide a job title, company, location, and a fictional application link for each job.
+    - Ensure the output is a valid JSON object matching the schema.`;
+
+    const result = await generateStructuredOutput({
+      prompt: promptText,
+      schema: FindRelatedJobsOutputSchema as any
+    });
+    return result as any;
   }
 );

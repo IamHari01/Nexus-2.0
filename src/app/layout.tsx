@@ -98,7 +98,8 @@ export default function RootLayout({
                 </SidebarFooter>
               </Sidebar>
               <SidebarInset>
-                <header className="flex h-12 shrink-0 items-center px-6">
+                <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 px-6 bg-background/85 backdrop-blur-md border-b border-border/40 transition-all">
+                  <SidebarTrigger className="-ml-1" />
                   <h1 className="text-2xl font-bold text-foreground">NEXUS</h1>
                 </header>
                 <main className="flex-1 overflow-y-auto">{children}</main>

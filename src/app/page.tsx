@@ -15,17 +15,26 @@ import { Badge } from '@/components/ui/badge';
 import AnalysisResults from '@/components/analysis-results';
 
 // Dynamically import AnalysisForm to avoid any server-side compilation issues with heavy libraries
-const AnalysisForm = dynamic(() => import('@/components/analysis-form'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-[400px] w-full items-center justify-center rounded-xl border border-dashed bg-slate-900/10 border-slate-800">
-      <div className="flex flex-col items-center gap-2">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-        <p className="text-sm text-slate-400">Initializing Nexus Engine...</p>
+const AnalysisForm = dynamic(
+  () => import('@/components/analysis-form').catch((err) => {
+    console.error('Failed to load AnalysisForm component:', err);
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+    return { default: () => null };
+  }),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[400px] w-full items-center justify-center rounded-xl border border-dashed bg-slate-900/10 border-slate-800">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
+          <p className="text-sm text-slate-400 font-mono animate-pulse">Awakening the Nexus Conclave...</p>
+        </div>
       </div>
-    </div>
-  ),
-});
+    ),
+  }
+);
 
 function HomeContent() {
   const [isLoading, setIsLoading] = useState(false);
@@ -74,10 +83,16 @@ function HomeContent() {
         // Push query parameter to the URL to render matching results immediately
         router.push(`/?id=${historyId}`);
       } else {
+        // Detect rate limit / quota exhaustion for a softer warning tone
+        const isQuotaError = initialResult.error?.toLowerCase().includes('quota') ||
+          initialResult.error?.toLowerCase().includes('rate') ||
+          initialResult.error?.toLowerCase().includes('exhausted') ||
+          initialResult.error?.toLowerCase().includes('free-tier');
+
         toast({
-          variant: 'destructive',
-          title: 'Analysis Failed',
-          description: initialResult.error || 'Check your Gemini API key and try again.',
+          variant: isQuotaError ? 'default' : 'destructive',
+          title: isQuotaError ? '⚠️ API Quota Limit Reached' : 'Analysis Failed',
+          description: initialResult.error || 'Check your Groq API key and try again.',
         });
         setIsLoading(false);
       }
