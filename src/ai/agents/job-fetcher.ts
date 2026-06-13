@@ -285,25 +285,10 @@ async function fetchJobsFromSerpApi(
 
 // Production-grade fallback generator for mock jobs
 function getMockJobs(query: string, location: string, remoteOnly: boolean): Job[] {
-  const titles = [
-    'Senior Frontend Engineer',
-    'Full Stack Engineer (Node/React)',
-    'DevOps & Cloud Specialist',
-    'Backend Engineer',
-    'Generative AI developer',
-    'QA Automation Architect',
-    'Software Engineer II',
-    'Systems Architect',
-    'Data Platform Engineer',
-    'Machine Learning Engineer',
-    'Cloud Security Engineer',
-    'Product Engineer (React/TypeScript)'
-  ];
   const companies = [
     'Stripe', 'Vercel', 'Linear', 'Supabase', 'Clerk', 'Resend', 'Google', 'Meta',
     'Netflix', 'Apple', 'Amazon', 'Microsoft', 'Airbnb', 'Uber', 'Figma', 'Retool'
   ];
-  const locations = ['Remote', 'San Francisco, CA', 'New York, NY', 'Austin, TX', 'Seattle, WA', 'London, UK', 'Chennai, Tamil Nadu', 'Bangalore, Karnataka'];
   const skillsPool = {
     Frontend: ['React', 'Next.js', 'TailwindCSS', 'TypeScript', 'Redux', 'HTML5', 'CSS3', 'Jest'],
     Backend: ['Node.js', 'Express', 'TypeScript', 'PostgreSQL', 'Redis', 'Docker', 'REST APIs', 'GraphQL'],
@@ -313,18 +298,80 @@ function getMockJobs(query: string, location: string, remoteOnly: boolean): Job[
 
   const selectedTitle = query || 'Software Engineer';
   const selectedLoc = location || 'Remote';
+  const queryLower = selectedTitle.toLowerCase();
+  const baseTitle = selectedTitle.trim() || 'Software Engineer';
+
+  // Generate 30 highly relevant job titles dynamically using prefix and suffix patterns
+  const generatedTitles: string[] = [baseTitle];
+  generatedTitles.push(`Senior ${baseTitle}`);
+  generatedTitles.push(`Lead ${baseTitle}`);
+  generatedTitles.push(`Staff ${baseTitle}`);
+  generatedTitles.push(`Principal ${baseTitle}`);
+  generatedTitles.push(`${baseTitle} II`);
+  generatedTitles.push(`${baseTitle} III`);
+  generatedTitles.push(`Contract ${baseTitle}`);
+  generatedTitles.push(`Remote ${baseTitle}`);
+  generatedTitles.push(`Associate ${baseTitle}`);
+
+  // Inject domain-specific equivalents if query contains keywords
+  if (queryLower.includes('ai') || queryLower.includes('machine') || queryLower.includes('ml') || queryLower.includes('nlp')) {
+    generatedTitles.push(
+      'Machine Learning Engineer',
+      'Generative AI Developer',
+      'AI/ML Research Scientist',
+      'NLP Specialist',
+      'Deep Learning Engineer',
+      'AI Platform Engineer',
+      'AI Solutions Architect',
+      'Computer Vision Engineer'
+    );
+  } else if (queryLower.includes('front') || queryLower.includes('react') || queryLower.includes('ui') || queryLower.includes('web')) {
+    generatedTitles.push(
+      'Frontend Engineer',
+      'Senior Frontend Developer',
+      'UI/UX Developer',
+      'React Developer',
+      'Lead Web Engineer',
+      'Next.js Specialist'
+    );
+  } else if (queryLower.includes('back') || queryLower.includes('node') || queryLower.includes('api') || queryLower.includes('server')) {
+    generatedTitles.push(
+      'Backend Software Engineer',
+      'Node.js Developer',
+      'Distributed Systems Engineer',
+      'API Platform Engineer',
+      'Database Specialist'
+    );
+  } else if (queryLower.includes('devops') || queryLower.includes('cloud') || queryLower.includes('sre') || queryLower.includes('infra')) {
+    generatedTitles.push(
+      'Site Reliability Engineer (SRE)',
+      'Cloud Infrastructure Engineer',
+      'DevOps Engineer',
+      'Platform Security Specialist',
+      'Kubernetes Administrator'
+    );
+  } else {
+    generatedTitles.push(
+      `Full Stack ${baseTitle}`,
+      `Software Engineer - ${baseTitle}`,
+      `Systems Developer (${baseTitle})`,
+      `Applications Engineer (${baseTitle})`
+    );
+  }
 
   const mockJobs: Job[] = [];
 
   for (let i = 0; i < 30; i++) {
     const company = companies[i % companies.length];
-    const jobTitle = i === 0 ? selectedTitle : `${titles[i % titles.length]}`;
-    const loc = i % 2 === 0 || remoteOnly ? 'Remote' : (selectedLoc === 'Remote' ? locations[i % locations.length] : selectedLoc);
+    const jobTitle = generatedTitles[i % generatedTitles.length];
+    
+    // Ensure mock locations match target location or Remote
+    const loc = i % 2 === 0 || remoteOnly ? 'Remote' : selectedLoc;
 
     // Build a realistic description with required skills
     const category = jobTitle.toLowerCase().includes('front') ? 'Frontend' : 
-                     jobTitle.toLowerCase().includes('ai') || jobTitle.toLowerCase().includes('machine') ? 'AI' : 
-                     jobTitle.toLowerCase().includes('devops') || jobTitle.toLowerCase().includes('security') ? 'DevOps' : 'Backend';
+                     jobTitle.toLowerCase().includes('ai') || jobTitle.toLowerCase().includes('machine') || jobTitle.toLowerCase().includes('ml') ? 'AI' : 
+                     jobTitle.toLowerCase().includes('devops') || jobTitle.toLowerCase().includes('cloud') || jobTitle.toLowerCase().includes('sre') ? 'DevOps' : 'Backend';
 
     const reqSkills = skillsPool[category];
     const desc = `We are looking for a highly skilled ${jobTitle} to join our team at ${company}. 
@@ -360,6 +407,29 @@ Responsibilities:
   return mockJobs;
 }
 
+function getNormalizedLocationTerms(loc: string): string[] {
+  const terms = [loc];
+  if (loc.includes('bangalore') || loc.includes('bengaluru')) {
+    terms.push('bangalore', 'bengaluru');
+  }
+  if (loc.includes('chennai') || loc.includes('madras') || loc.includes('tamil nadu')) {
+    terms.push('chennai', 'madras', 'tamil nadu');
+  }
+  if (loc.includes('mumbai') || loc.includes('bombay')) {
+    terms.push('mumbai', 'bombay');
+  }
+  if (loc.includes('delhi') || loc.includes('ncr') || loc.includes('new delhi')) {
+    terms.push('delhi', 'ncr', 'new delhi');
+  }
+  if (loc.includes('san francisco') || loc.includes('sf') || loc.includes('bay area')) {
+    terms.push('san francisco', 'sf', 'bay area');
+  }
+  if (loc.includes('new york') || loc.includes('ny') || loc.includes('nyc')) {
+    terms.push('new york', 'ny', 'nyc');
+  }
+  return Array.from(new Set(terms));
+}
+
 function isLocationCompatible(jobLocation: string, targetLocation: string): boolean {
   const jobLoc = jobLocation.toLowerCase();
   const targetLoc = targetLocation.toLowerCase();
@@ -369,14 +439,16 @@ function isLocationCompatible(jobLocation: string, targetLocation: string): bool
     return true;
   }
 
-  // If the job location contains the target location (e.g. "Chennai, India" contains "Chennai" or "India")
-  if (jobLoc.includes(targetLoc)) {
-    return true;
-  }
+  const jobLocTerms = getNormalizedLocationTerms(jobLoc);
+  const targetLocTerms = getNormalizedLocationTerms(targetLoc);
 
-  // If the target location contains the job location (e.g. job is "India" and target is "Chennai, India")
-  if (targetLoc.includes(jobLoc)) {
-    return true;
+  // If any target terms are included in job terms, or vice versa
+  for (const tLoc of targetLocTerms) {
+    for (const jLoc of jobLocTerms) {
+      if (jLoc.includes(tLoc) || tLoc.includes(jLoc)) {
+        return true;
+      }
+    }
   }
 
   // Handle Remote / Worldwide jobs
@@ -505,10 +577,10 @@ export async function fetchJobs(
       }
     }
     
-    // Fill up to 20 if we still need more
+    // Fill up to 20 if we still need more, verifying location compatibility
     for (const mock of mockJobs) {
       if (uniqueJobs.length >= 20) break;
-      if (!uniqueJobs.some(j => j.id === mock.id)) {
+      if (!uniqueJobs.some(j => j.id === mock.id) && isLocationCompatible(mock.location, location)) {
         uniqueJobs.push(mock);
       }
     }

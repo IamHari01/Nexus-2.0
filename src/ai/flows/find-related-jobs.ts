@@ -77,7 +77,19 @@ const findRelatedJobsFlow = ai.defineFlow(
     const result = await generateStructuredOutput({
       prompt: promptText,
       schema: FindRelatedJobsOutputSchema as any
-    });
+    }) as any;
+
+    // Post-process fictional job links to make them high-intent search URLs
+    if (result.related_jobs && Array.isArray(result.related_jobs)) {
+      result.related_jobs = result.related_jobs.map((job: any) => {
+        const query = `${job.company} ${job.job_title} jobs`.trim();
+        return {
+          ...job,
+          job_link: `https://www.google.com/search?q=${encodeURIComponent(query)}`
+        };
+      });
+    }
+
     return result as any;
   }
 );

@@ -22,6 +22,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { LogOut, LayoutDashboard, FileText } from 'lucide-react';
 import Logo from '@/components/logo';
 import Link from 'next/link';
+import PageHeader from '@/components/page-header';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -100,7 +101,7 @@ export default function RootLayout({
               <SidebarInset>
                 <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 px-6 bg-background/85 backdrop-blur-md border-b border-border/40 transition-all">
                   <SidebarTrigger className="-ml-1" />
-                  <h1 className="text-2xl font-bold text-foreground">NEXUS</h1>
+                  <PageHeader />
                 </header>
                 <main className="flex-1 overflow-y-auto">{children}</main>
               </SidebarInset>

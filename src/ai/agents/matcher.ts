@@ -249,6 +249,9 @@ export async function matchJobs(
     });
   }
 
+  // Filter out matches with less than 35% score
+  const filteredResults = matchResults.filter(r => r.score >= 35);
+
   // Sort results by final match score descending
-  return matchResults.sort((a, b) => b.score - a.score);
+  return filteredResults.sort((a, b) => b.score - a.score);
 }

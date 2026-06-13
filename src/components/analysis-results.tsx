@@ -44,21 +44,24 @@ function TypewriterText({ text, speed = 10 }: { text: string; speed?: number }) 
 
 // Google-style Radial Progress Dial
 function ProbabilityScore({ score }: { score: number }) {
+  // Safe parsing: convert decimal probability (e.g. 0.85) to percentage if needed
+  const displayScore = score > 0 && score <= 1 ? Math.round(score * 100) : Math.round(score);
+
   const size = 130;
   const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const strokeDashoffset = circumference - (displayScore / 100) * circumference;
 
-  const colorClass = score >= 75 
+  const colorClass = displayScore >= 75 
     ? 'stroke-emerald-500' 
-    : score >= 40 
+    : displayScore >= 40 
       ? 'stroke-amber-500' 
       : 'stroke-rose-500';
 
-  const textClass = score >= 75 
+  const textClass = displayScore >= 75 
     ? 'text-emerald-400' 
-    : score >= 40 
+    : displayScore >= 40 
       ? 'text-amber-400' 
       : 'text-rose-400';
 
@@ -86,7 +89,7 @@ function ProbabilityScore({ score }: { score: number }) {
         />
       </svg>
       <div className={cn("absolute inset-0 flex flex-col items-center justify-center font-extrabold", textClass)}>
-        <span className="text-3xl leading-none">{score}</span>
+        <span className="text-3xl leading-none">{displayScore}%</span>
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">Match Rate</span>
       </div>
     </div>

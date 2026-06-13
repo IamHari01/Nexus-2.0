@@ -105,6 +105,107 @@ export default function JobDashboard() {
   const [activeTab, setActiveTab] = React.useState<'matches' | 'market' | 'optimizer' | 'recommendations' | 'trace'>('matches');
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
+  // Premium Amazon-like Filter States
+  const [filterSearch, setFilterSearch] = React.useState('');
+  const [filterMinScore, setFilterMinScore] = React.useState(35);
+  const [filterStatuses, setFilterStatuses] = React.useState<string[]>(['High', 'Medium', 'Low']);
+  const [filterModes, setFilterModes] = React.useState<string[]>(['Remote', 'On-site/Hybrid']);
+  const [filterSources, setFilterSources] = React.useState<string[]>([]);
+  const [filterCompanies, setFilterCompanies] = React.useState<string[]>([]);
+  const [sortBy, setSortBy] = React.useState<'score' | 'title' | 'company'>('score');
+  const [showAllCompanies, setShowAllCompanies] = React.useState(false);
+
+  // Extract unique companies and sources for filtering
+  const uniqueSources = React.useMemo(() => {
+    const sources = matches.map(m => m.publisher || m.source || 'Unknown');
+    return Array.from(new Set(sources)).filter(Boolean).sort();
+  }, [matches]);
+
+  const uniqueCompanies = React.useMemo(() => {
+    const companies = matches.map(m => m.company);
+    return Array.from(new Set(companies)).filter(Boolean).sort();
+  }, [matches]);
+
+  // Set default selected filters when matches change
+  React.useEffect(() => {
+    if (matches.length > 0) {
+      setFilterSources(Array.from(new Set(matches.map(m => m.publisher || m.source || 'Unknown'))).filter(Boolean));
+      setFilterCompanies(Array.from(new Set(matches.map(m => m.company))).filter(Boolean));
+    } else {
+      setFilterSources([]);
+      setFilterCompanies([]);
+    }
+  }, [matches]);
+
+  const handleResetFilters = () => {
+    setFilterSearch('');
+    setFilterMinScore(35);
+    setFilterStatuses(['High', 'Medium', 'Low']);
+    setFilterModes(['Remote', 'On-site/Hybrid']);
+    setFilterSources(uniqueSources);
+    setFilterCompanies(uniqueCompanies);
+    setSortBy('score');
+  };
+
+  const filteredMatches = React.useMemo(() => {
+    return matches
+      .filter((item) => {
+        // Keyword Search (case-insensitive search in title, company, or skills)
+        const s = filterSearch.toLowerCase().trim();
+        if (s) {
+          const matchTitle = item.job_title.toLowerCase().includes(s);
+          const matchCompany = item.company.toLowerCase().includes(s);
+          const matchSkills = (item.matched_skills || []).some(sk => sk.toLowerCase().includes(s)) ||
+                             (item.missing_skills || []).some(sk => sk.toLowerCase().includes(s));
+          if (!matchTitle && !matchCompany && !matchSkills) return false;
+        }
+
+        // Min Score filter
+        if (item.score < filterMinScore) return false;
+
+        // Fit Status filter
+        if (!filterStatuses.includes(item.match_status)) return false;
+
+        // Work Mode filter (Remote vs Hybrid/On-site)
+        const isRemote = item.location.toLowerCase().includes('remote');
+        if (isRemote && !filterModes.includes('Remote')) return false;
+        if (!isRemote && !filterModes.includes('On-site/Hybrid')) return false;
+
+        // Source filter
+        const sourceName = item.publisher || item.source || 'Unknown';
+        if (filterSources.length > 0 && !filterSources.includes(sourceName)) return false;
+
+        // Company filter
+        if (filterCompanies.length > 0 && !filterCompanies.includes(item.company)) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'score') {
+          return b.score - a.score;
+        }
+        if (sortBy === 'title') {
+          return a.job_title.localeCompare(b.job_title);
+        }
+        if (sortBy === 'company') {
+          return a.company.localeCompare(b.company);
+        }
+        return 0;
+      });
+  }, [matches, filterSearch, filterMinScore, filterStatuses, filterModes, filterSources, filterCompanies, sortBy]);
+
+  // Reactive selected job selection based on filters
+  React.useEffect(() => {
+    if (filteredMatches.length > 0) {
+      const isStillVisible = filteredMatches.some(m => m.job_id === selectedMatch?.job_id);
+      if (!isStillVisible) {
+        setSelectedMatch(filteredMatches[0]);
+      }
+    } else {
+      setSelectedMatch(null);
+    }
+  }, [filteredMatches, selectedMatch]);
+
   // Fetch Dashboard Stats & Match History
   const loadDashboardData = async (forceSelectFirst?: boolean) => {
     setIsLoadingData(true);
@@ -595,13 +696,238 @@ export default function JobDashboard() {
 
           {/* Tab Content Panels */}
           {activeTab === 'matches' && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in duration-300">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
               
-              {/* Matches List (5 cols) */}
-              <div className="md:col-span-5 space-y-4">
+              {/* Left Column: Amazon-style Filter Panel (3 cols) */}
+              <div className="lg:col-span-3 space-y-5">
+                <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md">
+                  <CardHeader className="pb-3 border-b border-slate-800/80 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4 text-indigo-400" />
+                      <CardTitle className="text-xs font-bold text-foreground">Filter Opportunities</CardTitle>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetFilters}
+                      className="h-7 px-2 text-[10px] font-bold text-slate-400 hover:text-indigo-400 hover:bg-slate-800/50"
+                    >
+                      Clear All
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-5 text-xs">
+                    
+                    {/* 1. Keyword Search */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Search matches</span>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Title, company, or skill..."
+                          className="pl-8 h-9 text-xs bg-slate-950/50 border-slate-800 focus:border-indigo-500 focus:ring-indigo-500"
+                          value={filterSearch}
+                          onChange={(e) => setFilterSearch(e.target.value)}
+                        />
+                        {filterSearch && (
+                          <button
+                            onClick={() => setFilterSearch('')}
+                            className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Sort By */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sort By</span>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['score', 'title', 'company'] as const).map((opt) => (
+                          <Button
+                            key={opt}
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSortBy(opt)}
+                            className={`h-7 text-[10px] font-semibold capitalize border-slate-800 px-1 ${
+                              sortBy === opt 
+                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white border-transparent' 
+                                : 'bg-slate-950/20 hover:bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {opt === 'score' ? 'Score' : opt === 'title' ? 'Title' : 'Company'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 3. Min Score Threshold Slider */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Min ATS Score</span>
+                        <span className="text-[10px] font-bold text-indigo-400 bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-900/40">
+                          {filterMinScore}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={35}
+                        max={100}
+                        step={5}
+                        value={filterMinScore}
+                        onChange={(e) => setFilterMinScore(Number(e.target.value))}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
+                        <span>35%</span>
+                        <span>50%</span>
+                        <span>75%</span>
+                        <span>100%</span>
+                      </div>
+                    </div>
+
+                    {/* 4. Match Fit Quality */}
+                    <div className="space-y-2 border-t border-slate-800/60 pt-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Match Fit</span>
+                      <div className="space-y-1.5">
+                        {[
+                          { label: 'High Fit (75%+)', value: 'High' },
+                          { label: 'Medium Fit (40-74%)', value: 'Medium' },
+                          { label: 'Low Fit (35-39%)', value: 'Low' }
+                        ].map((fit) => {
+                          const checked = filterStatuses.includes(fit.value);
+                          return (
+                            <label key={fit.value} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  if (checked) {
+                                    setFilterStatuses(filterStatuses.filter(s => s !== fit.value));
+                                  } else {
+                                    setFilterStatuses([...filterStatuses, fit.value]);
+                                  }
+                                }}
+                                className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                              />
+                              <span className="select-none text-xs">{fit.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 5. Work Mode */}
+                    <div className="space-y-2 border-t border-slate-800/60 pt-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Work Mode</span>
+                      <div className="space-y-1.5">
+                        {['Remote', 'On-site/Hybrid'].map((mode) => {
+                          const checked = filterModes.includes(mode);
+                          return (
+                            <label key={mode} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  if (checked) {
+                                    setFilterModes(filterModes.filter(m => m !== mode));
+                                  } else {
+                                    setFilterModes([...filterModes, mode]);
+                                  }
+                                }}
+                                className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                              />
+                              <span className="select-none text-xs">{mode}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 6. Sources */}
+                    {uniqueSources.length > 0 && (
+                      <div className="space-y-2 border-t border-slate-800/60 pt-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Sources</span>
+                        <div className="space-y-1.5">
+                          {uniqueSources.map((source) => {
+                            const checked = filterSources.includes(source);
+                            return (
+                              <label key={source} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    if (checked) {
+                                      setFilterSources(filterSources.filter(s => s !== source));
+                                    } else {
+                                      setFilterSources([...filterSources, source]);
+                                    }
+                                  }}
+                                  className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                                />
+                                <span className="select-none text-xs">{source}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 7. Companies (Amazon-style collapsible list) */}
+                    {uniqueCompanies.length > 0 && (
+                      <div className="space-y-2 border-t border-slate-800/60 pt-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Companies</span>
+                        <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                          {uniqueCompanies
+                            .slice(0, showAllCompanies ? undefined : 5)
+                            .map((company) => {
+                              const checked = filterCompanies.includes(company);
+                              return (
+                                <label key={company} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      if (checked) {
+                                        setFilterCompanies(filterCompanies.filter(c => c !== company));
+                                      } else {
+                                        setFilterCompanies([...filterCompanies, company]);
+                                      }
+                                    }}
+                                    className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                                  />
+                                  <span className="select-none text-xs truncate max-w-[150px]">{company}</span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                        {uniqueCompanies.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllCompanies(!showAllCompanies)}
+                            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 mt-1 block"
+                          >
+                            {showAllCompanies ? 'Show Less ▲' : `Show All (${uniqueCompanies.length}) ▼`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Middle Column: Matches Feed List (4 cols) */}
+              <div className="lg:col-span-4 md:col-span-5 space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                   <span>Live Matching Feed</span>
-                  {matches.length > 0 && <Badge className="bg-indigo-950 text-indigo-400 border-indigo-900">{matches.length} Results</Badge>}
+                  {matches.length > 0 && (
+                    <Badge className="bg-indigo-950 text-indigo-400 border-indigo-900">
+                      {filteredMatches.length === matches.length 
+                        ? `${matches.length} Results` 
+                        : `${filteredMatches.length} / ${matches.length} Filtered`}
+                    </Badge>
+                  )}
                 </h3>
 
                 {isLoadingData ? (
@@ -609,17 +935,17 @@ export default function JobDashboard() {
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
                     <p className="text-xs text-muted-foreground">Synchronizing feed...</p>
                   </div>
-                ) : matches.length === 0 ? (
+                ) : filteredMatches.length === 0 ? (
                   <div className="flex h-64 flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl bg-slate-900/10 p-6 text-center gap-3">
                     <Briefcase className="h-8 w-8 text-muted-foreground/60" />
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold text-slate-300">No Job Matches Yet</p>
-                      <p className="text-xs text-muted-foreground max-w-[200px] mx-auto">Upload your resume and search terms to scan live listings.</p>
+                      <p className="text-sm font-semibold text-slate-300">No Job Matches Found</p>
+                      <p className="text-xs text-muted-foreground max-w-[200px] mx-auto">Try loosening your filter criteria or run a new diagnostic search.</p>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-[580px] overflow-y-auto pr-2 scrollbar-hide">
-                    {matches.map((item) => {
+                    {filteredMatches.map((item) => {
                       const isSelected = selectedMatch?.job_id === item.job_id;
                       const scoreColor = item.score >= 75 ? 'text-emerald-400' : item.score >= 40 ? 'text-amber-400' : 'text-rose-400';
                       
@@ -669,8 +995,8 @@ export default function JobDashboard() {
                 )}
               </div>
 
-              {/* Expanded Match Details (7 cols) */}
-              <div className="md:col-span-7">
+              {/* Right Column: Expanded Match Details (5 cols) */}
+              <div className="lg:col-span-5 md:col-span-7">
                 {selectedMatch ? (
                   <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md h-full flex flex-col justify-between">
                     <div>

@@ -148,6 +148,9 @@ export async function fetchAndMatchJobsAction(
       remoteOnly
     });
 
+    // Clear previous match results to keep feed location/criteria specific
+    await DBManager.clearAllMatchResults();
+
     // Save outputs in database for dashboard persistence
     await DBManager.saveJobs(result.jobs);
     

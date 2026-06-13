@@ -26,7 +26,12 @@ const ShortlistingProbabilityOutputSchema = z.object({
   company: z.string().describe('The name of the company offering the job.'),
   job_title: z.string().describe('The title of the job.'),
   location: z.string().describe('The location of the job.'),
-  shortlist_probability: z.number().min(0).max(99).transform(Math.round).describe('The probability (0-99) of the candidate being shortlisted.'),
+  shortlist_probability: z.number().min(0).max(100).transform(val => {
+    if (val > 0 && val <= 1) {
+      return Math.round(val * 100);
+    }
+    return Math.round(val);
+  }).describe('The shortlist match percentage (0 to 100) of the candidate being shortlisted. Must be an integer between 0 and 100 (e.g., 85 for 85%).'),
   match_status: z.enum(['High', 'Medium', 'Low']).describe('The overall match status between the candidate and the job.'),
   reasoning: z.string().describe('A 1-2 sentence explanation of the shortlisting probability, from an ATS perspective.'),
   matched_skills: z.string().array().describe('The skills from the resume that match the job description.'),
@@ -193,7 +198,30 @@ const displayShortlistingProbabilityFlow = ai.defineFlow(
     const result = await generateStructuredOutput({
       prompt: promptText,
       schema: ShortlistingProbabilityOutputSchema as any
-    });
+    }) as any;
+
+    // Post-process to fix decimal probabilities (e.g. 0.85 -> 85)
+    if (result.shortlist_probability > 0 && result.shortlist_probability <= 1) {
+      result.shortlist_probability = Math.round(result.shortlist_probability * 100);
+    }
+    if (result.shortlist_probability > 100) {
+      result.shortlist_probability = 100;
+    }
+
+    // Extract real URL if present in the job description text
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urlsInDesc = input.jobDescription.match(urlRegex) || [];
+    const realUrl = urlsInDesc.find(u => !u.includes('example.com') && !u.includes('schema.org') && !u.includes('wikipedia.org'));
+
+    if (realUrl) {
+      result.job_link = realUrl.replace(/[.,;)]+$/, '');
+    } else {
+      // Otherwise, generate a high-intent Google search link for the job
+      const companyName = result.company && result.company.toLowerCase() !== 'not specified' ? result.company : input.targetJobTitle;
+      const searchTerms = `${companyName} ${result.job_title || input.targetJobTitle} jobs`.trim();
+      result.job_link = `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}`;
+    }
+
     return result as any;
   }
 );

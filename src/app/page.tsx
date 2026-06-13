@@ -165,7 +165,9 @@ function HomeContent() {
                         <h5 className="font-bold text-xs text-slate-200 truncate">{item.job_title}</h5>
                       </div>
                       <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] shrink-0 group-hover:scale-105 transition-transform">
-                        {item.result.shortlist_probability}%
+                        {item.result.shortlist_probability > 0 && item.result.shortlist_probability <= 1 
+                          ? Math.round(item.result.shortlist_probability * 100) 
+                          : Math.round(item.result.shortlist_probability)}%
                       </Badge>
                     </div>
                   ))}
