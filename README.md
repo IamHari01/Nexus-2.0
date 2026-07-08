@@ -15,6 +15,31 @@ An enterprise-grade, multi-agent AI career intelligence engine and real-time job
 
 ---
 
+
+
+
+
+
+
+
+<img width="1608" height="881" alt="Screenshot 2026-07-08 at 9 40 19 AM" src="https://github.com/user-attachments/assets/06267424-08c9-41b5-8ea9-99431112226b" />
+
+
+<img width="1418" height="868" alt="Screenshot 2026-07-08 at 9 41 12 AM" src="https://github.com/user-attachments/assets/2c59c1fe-1f37-406f-baa4-57ff92f4d7f6" />
+
+<img width="1461" height="889" alt="Screenshot 2026-07-08 at 9 41 41 AM" src="https://github.com/user-attachments/assets/2b045ea4-aac4-436c-9d33-0bb2d9bc0549" />
+
+<img width="1179" height="817" alt="Screenshot 2026-07-08 at 9 42 10 AM" src="https://github.com/user-attachments/assets/ec292f2c-9a8b-4d8c-acf6-d5b8895bf446" />
+
+<img width="1175" height="843" alt="Screenshot 2026-07-08 at 9 42 40 AM" src="https://github.com/user-attachments/assets/379e962c-d220-4f71-abca-e55cc5b47cbe" />
+
+<img width="1406" height="791" alt="Screenshot 2026-07-08 at 9 42 56 AM" src="https://github.com/user-attachments/assets/e1e10e64-19ef-497f-96e9-5518b2a6ddb5" />
+
+
+
+
+
+
 ## 📖 Overview
 
 **NEXUS 2.0** is a dual-mode, AI-driven career companion that transforms how job seekers optimize their applications and discover opportunities:
