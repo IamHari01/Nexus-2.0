@@ -25,6 +25,7 @@ import Logo from '@/components/logo';
 import Link from 'next/link';
 import PageHeader from '@/components/page-header';
 import SidebarNav from '@/components/sidebar-nav';
+import { Providers } from '@/components/providers';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -49,57 +50,59 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('min-h-screen bg-background font-body antialiased', inter.variable)} suppressHydrationWarning>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <HistoryProvider>
-            <SidebarProvider defaultOpen={true}>
-              <Sidebar collapsible="icon" className="border-r border-slate-900/60 bg-slate-950/40 backdrop-blur-md">
-                <SidebarHeader>
-                  <Logo />
-                  <SidebarTrigger />
-                </SidebarHeader>
-                <SidebarContent>
-                  <SidebarNav />
-                  <div className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest group-data-[collapsible=icon]:hidden mt-4">
-                    Analysis History
-                  </div>
-                  <Suspense fallback={
-                    <div className="px-4 py-2 text-xs text-muted-foreground animate-pulse group-data-[collapsible=icon]:hidden">
-                      Loading history...
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <HistoryProvider>
+              <SidebarProvider defaultOpen={true}>
+                <Sidebar collapsible="icon" className="border-r border-slate-900/60 bg-slate-950/40 backdrop-blur-md">
+                  <SidebarHeader>
+                    <Logo />
+                    <SidebarTrigger />
+                  </SidebarHeader>
+                  <SidebarContent>
+                    <SidebarNav />
+                    <div className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest group-data-[collapsible=icon]:hidden mt-4">
+                      Analysis History
                     </div>
-                  }>
-                    <HistoryList />
-                  </Suspense>
-                </SidebarContent>
-                <SidebarFooter>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <ThemeToggle />
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton tooltip="Logout">
-                        <LogOut />
-                        <span>Logout</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarFooter>
-              </Sidebar>
-              <SidebarInset>
-                <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 px-6 bg-background/85 backdrop-blur-md border-b border-border/40 transition-all">
-                  <SidebarTrigger className="-ml-1" />
-                  <PageHeader />
-                </header>
-                <main className="flex-1 overflow-y-auto">{children}</main>
-              </SidebarInset>
-              <Toaster />
-            </SidebarProvider>
-          </HistoryProvider>
-        </ThemeProvider>
+                    <Suspense fallback={
+                      <div className="px-4 py-2 text-xs text-muted-foreground animate-pulse group-data-[collapsible=icon]:hidden">
+                        Loading history...
+                      </div>
+                    }>
+                      <HistoryList />
+                    </Suspense>
+                  </SidebarContent>
+                  <SidebarFooter>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <ThemeToggle />
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton tooltip="Logout">
+                          <LogOut />
+                          <span>Logout</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarFooter>
+                </Sidebar>
+                <SidebarInset>
+                  <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 px-6 bg-background/85 backdrop-blur-md border-b border-border/40 transition-all">
+                    <SidebarTrigger className="-ml-1" />
+                    <PageHeader />
+                  </header>
+                  <main className="flex-1 overflow-y-auto">{children}</main>
+                </SidebarInset>
+                <Toaster />
+              </SidebarProvider>
+            </HistoryProvider>
+          </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );

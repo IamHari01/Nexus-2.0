@@ -17,6 +17,8 @@ import { DBManager } from '@/lib/db';
 import { RateLimitError } from '@/lib/llm-client';
 import type { CandidateProfile, JobMatchResult, MultiAgentResult } from '@/lib/job-types';
 import { runOrchestrator } from '@/ai/orchestrator/graph';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Promise<{
   success: boolean;
@@ -140,6 +142,16 @@ export async function fetchAndMatchJobsAction(
     };
   }
 
+  const session = await getServerSession(authOptions);
+  const userId = session?.user ? (session.user as any).id : null;
+
+  if (!userId) {
+    return {
+      success: false,
+      error: 'You must be logged in to analyze and match jobs.',
+    };
+  }
+
   try {
     // Run the multi-agent LangGraph orchestrator
     const result = await runOrchestrator({
@@ -150,16 +162,16 @@ export async function fetchAndMatchJobsAction(
     });
 
     // Clear previous match results to keep feed location/criteria specific
-    await DBManager.clearAllMatchResults();
+    await DBManager.clearAllMatchResults(userId);
 
     // Save outputs in database for dashboard persistence
-    await DBManager.saveJobs(result.jobs);
+    await DBManager.saveJobs(userId, result.jobs);
     
     for (const match of result.matches) {
-      await DBManager.saveMatchResult(match);
+      await DBManager.saveMatchResult(userId, match);
     }
     
-    await DBManager.saveLatestAnalysis(result);
+    await DBManager.saveLatestAnalysis(userId, result);
 
     return { success: true, result };
   } catch (e: any) {

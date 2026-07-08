@@ -1,260 +1,134 @@
 import { Job, JobMatchResult, MultiAgentResult } from './job-types';
-import fs from 'fs';
-import path from 'path';
+import dbConnect from './mongodb';
+import UserData from '@/models/UserData';
+import { redis } from './redis';
 
-const LOCAL_DB_PATH = path.join(process.cwd(), 'src/lib/db-fallback.json');
-
-// Initialize local JSON DB structure if it doesn't exist
-function ensureLocalDbExists() {
-  if (!fs.existsSync(LOCAL_DB_PATH)) {
-    try {
-      fs.writeFileSync(
-        LOCAL_DB_PATH,
-        JSON.stringify({ jobs: [], matches: [] }, null, 2),
-        'utf-8'
-      );
-    } catch (e) {
-      console.error('Failed to initialize local JSON database file:', e);
-    }
-  }
-}
-
-// Local JSON file database helper functions
-function readLocalDb(): { jobs: Job[]; matches: JobMatchResult[]; latestAnalysis?: MultiAgentResult | null } {
-  ensureLocalDbExists();
-  try {
-    const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-    return JSON.parse(data || '{"jobs":[],"matches":[],"latestAnalysis":null}');
-  } catch (err) {
-    console.error('Error reading local database file:', err);
-    return { jobs: [], matches: [] };
-  }
-}
-
-function writeLocalDb(data: { jobs: Job[]; matches: JobMatchResult[]; latestAnalysis?: MultiAgentResult | null }) {
-  try {
-    const dir = path.dirname(LOCAL_DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error writing local database file:', err);
-  }
-}
-
-// Global Firebase Firestore database instance placeholder
-let firestoreDb: any = null;
-
-try {
-  // Dynamically load Firebase SDK on server-side to avoid client bundling conflicts
-  const hasFirebaseConfig = 
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-
-  if (hasFirebaseConfig && typeof window === 'undefined') {
-    const { initializeApp, getApps, getApp } = require('firebase/app');
-    const { getFirestore } = require('firebase/firestore');
-
-    const firebaseConfig = {
-      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    };
-
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    firestoreDb = getFirestore(app);
-    console.log('Firebase Firestore Database Client Initialized.');
-  }
-} catch (e) {
-  console.warn('Firebase initialization skipped, using local JSON database fallback.', e);
-}
-
-// Unified Database Manager Class
 export class DBManager {
-  /**
-   * Save fetched jobs, avoiding duplicates by job ID
-   */
-  static async saveJobs(jobs: Job[]): Promise<void> {
-    if (firestoreDb) {
-      try {
-        const { doc, setDoc } = require('firebase/firestore');
-        for (const job of jobs) {
-          const jobRef = doc(firestoreDb, 'jobs', job.id);
-          await setDoc(jobRef, job, { merge: true });
-        }
-        return;
-      } catch (e) {
-        console.error('Firestore saveJobs error, writing to local fallback:', e);
-      }
+  static async getUserData(userId: string) {
+    await dbConnect();
+    let userData = await UserData.findOne({ userId });
+    if (!userData) {
+      userData = await UserData.create({ userId, jobs: [], matches: [], latestAnalysis: null });
     }
+    return userData;
+  }
 
-    // Fallback to local file
-    const data = readLocalDb();
-    const existingIds = new Set(data.jobs.map(j => j.id));
+  static getCacheKey(userId: string, key: string) {
+    return `user:${userId}:${key}`;
+  }
+
+  static async invalidateCache(userId: string, key: string) {
+    try {
+      await redis.del(this.getCacheKey(userId, key));
+    } catch (e) {
+      console.error('Redis delete error', e);
+    }
+  }
+
+  static async saveJobs(userId: string, jobs: Job[]): Promise<void> {
+    const userData = await this.getUserData(userId);
+    const existingIds = new Set(userData.jobs.map((j: any) => j.id));
     
     let added = 0;
     for (const job of jobs) {
       if (!existingIds.has(job.id)) {
-        data.jobs.push(job);
+        userData.jobs.push(job);
         existingIds.add(job.id);
         added++;
       }
     }
     
     if (added > 0) {
-      writeLocalDb(data);
-      console.log(`Saved ${added} new jobs to local database.`);
+      await userData.save();
+      await this.invalidateCache(userId, 'jobs');
     }
   }
 
-  /**
-   * Fetch jobs with optional filtering
-   */
-  static async getJobs(): Promise<Job[]> {
-    if (firestoreDb) {
-      try {
-        const { collection, getDocs } = require('firebase/firestore');
-        const jobsCol = collection(firestoreDb, 'jobs');
-        const snapshot = await getDocs(jobsCol);
-        const jobsList: Job[] = [];
-        snapshot.forEach((doc: any) => {
-          jobsList.push(doc.data() as Job);
-        });
-        return jobsList;
-      } catch (e) {
-        console.error('Firestore getJobs error, loading local fallback:', e);
-      }
+  static async getJobs(userId: string): Promise<Job[]> {
+    try {
+      const cached = await redis.get(this.getCacheKey(userId, 'jobs'));
+      if (cached) return JSON.parse(cached);
+    } catch (e) {
+      console.error('Redis get error', e);
     }
 
-    // Fallback
-    const data = readLocalDb();
-    return data.jobs;
+    const userData = await this.getUserData(userId);
+    
+    try {
+      await redis.set(this.getCacheKey(userId, 'jobs'), JSON.stringify(userData.jobs), 'EX', 3600); // 1 hour cache
+    } catch (e) {
+      console.error('Redis set error', e);
+    }
+    
+    return userData.jobs;
   }
 
-  /**
-   * Save a single match result
-   */
-  static async saveMatchResult(match: JobMatchResult): Promise<void> {
-    if (firestoreDb) {
-      try {
-        const { doc, setDoc } = require('firebase/firestore');
-        const matchRef = doc(firestoreDb, 'matches', match.job_id);
-        await setDoc(matchRef, match, { merge: true });
-        return;
-      } catch (e) {
-        console.error('Firestore saveMatchResult error, writing local fallback:', e);
-      }
-    }
-
-    // Fallback
-    const data = readLocalDb();
-    data.matches = data.matches.filter(m => m.job_id !== match.job_id);
-    data.matches.unshift(match);
-    writeLocalDb(data);
+  static async saveMatchResult(userId: string, match: JobMatchResult): Promise<void> {
+    const userData = await this.getUserData(userId);
+    userData.matches = userData.matches.filter((m: any) => m.job_id !== match.job_id);
+    userData.matches.unshift(match);
+    await userData.save();
+    
+    await this.invalidateCache(userId, 'matches');
   }
 
-  /**
-   * Fetch all match results sorted by match score
-   */
-  static async getMatchResults(): Promise<JobMatchResult[]> {
-    if (firestoreDb) {
-      try {
-        const { collection, getDocs, query, orderBy } = require('firebase/firestore');
-        const matchesCol = collection(firestoreDb, 'matches');
-        // Simple query without compound order requirements
-        const snapshot = await getDocs(matchesCol);
-        const matchesList: JobMatchResult[] = [];
-        snapshot.forEach((doc: any) => {
-          matchesList.push(doc.data() as JobMatchResult);
-        });
-        return matchesList.sort((a, b) => b.score - a.score);
-      } catch (e) {
-        console.error('Firestore getMatchResults error, loading local fallback:', e);
-      }
+  static async getMatchResults(userId: string): Promise<JobMatchResult[]> {
+    try {
+      const cached = await redis.get(this.getCacheKey(userId, 'matches'));
+      if (cached) return JSON.parse(cached);
+    } catch (e) {
+      console.error('Redis get error', e);
     }
 
-    // Fallback
-    const data = readLocalDb();
-    return data.matches.sort((a, b) => b.score - a.score);
+    const userData = await this.getUserData(userId);
+    const matches = userData.matches.sort((a: any, b: any) => b.score - a.score);
+    
+    try {
+      await redis.set(this.getCacheKey(userId, 'matches'), JSON.stringify(matches), 'EX', 3600);
+    } catch (e) {
+      console.error('Redis set error', e);
+    }
+
+    return matches;
   }
 
-  /**
-   * Save the complete latest multi-agent analysis result
-   */
-  static async saveLatestAnalysis(result: MultiAgentResult): Promise<void> {
-    if (firestoreDb) {
-      try {
-        const { doc, setDoc } = require('firebase/firestore');
-        const docRef = doc(firestoreDb, 'analysis', 'latest');
-        await setDoc(docRef, result);
-        return;
-      } catch (e) {
-        console.error('Firestore saveLatestAnalysis error, writing to local fallback:', e);
-      }
-    }
-
-    // Fallback
-    const data = readLocalDb();
-    data.latestAnalysis = result;
-    writeLocalDb(data);
+  static async saveLatestAnalysis(userId: string, result: MultiAgentResult): Promise<void> {
+    const userData = await this.getUserData(userId);
+    userData.latestAnalysis = result;
+    await userData.save();
+    
+    await this.invalidateCache(userId, 'latestAnalysis');
   }
 
-  /**
-   * Retrieve the latest multi-agent analysis result
-   */
-  static async getLatestAnalysis(): Promise<MultiAgentResult | null> {
-    if (firestoreDb) {
+  static async getLatestAnalysis(userId: string): Promise<MultiAgentResult | null> {
+    try {
+      const cached = await redis.get(this.getCacheKey(userId, 'latestAnalysis'));
+      if (cached) return JSON.parse(cached);
+    } catch (e) {
+      console.error('Redis get error', e);
+    }
+
+    const userData = await this.getUserData(userId);
+    const latestAnalysis = userData.latestAnalysis || null;
+
+    if (latestAnalysis) {
       try {
-        const { doc, getDoc } = require('firebase/firestore');
-        const docRef = doc(firestoreDb, 'analysis', 'latest');
-        const snapshot = await getDoc(docRef);
-        if (snapshot.exists()) {
-          return snapshot.data() as MultiAgentResult;
-        }
-        return null;
+        await redis.set(this.getCacheKey(userId, 'latestAnalysis'), JSON.stringify(latestAnalysis), 'EX', 3600);
       } catch (e) {
-        console.error('Firestore getLatestAnalysis error, loading local fallback:', e);
+        console.error('Redis set error', e);
       }
     }
 
-    // Fallback
-    const data = readLocalDb();
-    return data.latestAnalysis || null;
+    return latestAnalysis;
   }
 
-  /**
-   * Clear all match results history and latest analysis
-   */
-  static async clearAllMatchResults(): Promise<void> {
-    if (firestoreDb) {
-      try {
-        const { collection, getDocs, deleteDoc, doc } = require('firebase/firestore');
-        const matchesCol = collection(firestoreDb, 'matches');
-        const snapshot = await getDocs(matchesCol);
-        for (const document of snapshot.docs) {
-          await deleteDoc(doc(firestoreDb, 'matches', document.id));
-        }
-        
-        // Also clear latest analysis
-        try {
-          await deleteDoc(doc(firestoreDb, 'analysis', 'latest'));
-        } catch (err) {
-          console.warn('Could not clear latest analysis document in Firestore:', err);
-        }
-        return;
-      } catch (e) {
-        console.error('Firestore clearAllMatchResults error, clearing local fallback:', e);
-      }
-    }
-
-    // Fallback
-    const data = readLocalDb();
-    data.matches = [];
-    data.latestAnalysis = null;
-    writeLocalDb(data);
+  static async clearAllMatchResults(userId: string): Promise<void> {
+    const userData = await this.getUserData(userId);
+    userData.matches = [];
+    userData.latestAnalysis = null;
+    await userData.save();
+    
+    await this.invalidateCache(userId, 'matches');
+    await this.invalidateCache(userId, 'latestAnalysis');
   }
 }

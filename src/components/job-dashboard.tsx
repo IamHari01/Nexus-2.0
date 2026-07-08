@@ -24,7 +24,9 @@ import {
   SlidersHorizontal,
   Plus,
   Activity,
-  Check
+  Check,
+  ChevronDown,
+  Filter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { fetchAndMatchJobsAction } from '@/app/actions';
 import type { Job, JobMatchResult, DashboardStats, MultiAgentResult } from '@/lib/job-types';
+import { useDebounce } from '@/hooks/use-debounce';
 
 export default function JobDashboard() {
   const { toast } = useToast();
@@ -106,14 +109,17 @@ export default function JobDashboard() {
   const [revealedSections, setRevealedSections] = React.useState<Record<string, boolean>>({ 'section-matches': true });
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
-  // Premium Amazon-like Filter States
+  // Premium LinkedIn-like Filter States
   const [filterSearch, setFilterSearch] = React.useState('');
+  const debouncedSearch = useDebounce(filterSearch, 250); // DSA: debounce to batch keystrokes
   const [filterMinScore, setFilterMinScore] = React.useState(35);
   const [filterStatuses, setFilterStatuses] = React.useState<string[]>(['High', 'Medium', 'Low']);
   const [filterModes, setFilterModes] = React.useState<string[]>(['Remote', 'On-site/Hybrid']);
   const [filterSources, setFilterSources] = React.useState<string[]>([]);
   const [filterCompanies, setFilterCompanies] = React.useState<string[]>([]);
   const [sortBy, setSortBy] = React.useState<'score' | 'title' | 'company'>('score');
+  const [openFilterDropdown, setOpenFilterDropdown] = React.useState<string | null>(null);
+  const filterBarRef = React.useRef<HTMLDivElement>(null);
   const [showAllCompanies, setShowAllCompanies] = React.useState(false);
 
   // Extract unique companies and sources for filtering
@@ -148,52 +154,68 @@ export default function JobDashboard() {
     setSortBy('score');
   };
 
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterBarRef.current && !filterBarRef.current.contains(e.target as Node)) {
+        setOpenFilterDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // DSA-optimized filtering using Set for O(1) category lookups
   const filteredMatches = React.useMemo(() => {
-    return matches
-      .filter((item) => {
-        // Keyword Search (case-insensitive search in title, company, or skills)
-        const s = filterSearch.toLowerCase().trim();
-        if (s) {
-          const matchTitle = item.job_title.toLowerCase().includes(s);
-          const matchCompany = item.company.toLowerCase().includes(s);
-          const matchSkills = (item.matched_skills || []).some(sk => sk.toLowerCase().includes(s)) ||
-                             (item.missing_skills || []).some(sk => sk.toLowerCase().includes(s));
-          if (!matchTitle && !matchCompany && !matchSkills) return false;
-        }
+    // Pre-compute Sets for O(1) lookups instead of O(K) array.includes()
+    const statusSet = new Set(filterStatuses);
+    const modeSet = new Set(filterModes);
+    const sourceSet = new Set(filterSources);
+    const companySet = new Set(filterCompanies);
+    const searchTerm = debouncedSearch.toLowerCase().trim();
 
-        // Min Score filter
-        if (item.score < filterMinScore) return false;
+    // Single-pass O(N) filter
+    const filtered = matches.filter((item) => {
+      // Keyword search (debounced)
+      if (searchTerm) {
+        const inTitle = item.job_title.toLowerCase().includes(searchTerm);
+        const inCompany = item.company.toLowerCase().includes(searchTerm);
+        const inSkills = (item.matched_skills || []).some(sk => sk.toLowerCase().includes(searchTerm)) ||
+                         (item.missing_skills || []).some(sk => sk.toLowerCase().includes(searchTerm));
+        if (!inTitle && !inCompany && !inSkills) return false;
+      }
 
-        // Fit Status filter
-        if (!filterStatuses.includes(item.match_status)) return false;
+      // O(1) numeric comparison
+      if (item.score < filterMinScore) return false;
 
-        // Work Mode filter (Remote vs Hybrid/On-site)
-        const isRemote = item.location.toLowerCase().includes('remote');
-        if (isRemote && !filterModes.includes('Remote')) return false;
-        if (!isRemote && !filterModes.includes('On-site/Hybrid')) return false;
+      // O(1) Set lookup
+      if (!statusSet.has(item.match_status)) return false;
 
-        // Source filter
-        const sourceName = item.publisher || item.source || 'Unknown';
-        if (filterSources.length > 0 && !filterSources.includes(sourceName)) return false;
+      // O(1) Set lookup for work mode
+      const isRemote = item.location.toLowerCase().includes('remote');
+      if (isRemote && !modeSet.has('Remote')) return false;
+      if (!isRemote && !modeSet.has('On-site/Hybrid')) return false;
 
-        // Company filter
-        if (filterCompanies.length > 0 && !filterCompanies.includes(item.company)) return false;
+      // O(1) Set lookup for source
+      const sourceName = item.publisher || item.source || 'Unknown';
+      if (sourceSet.size > 0 && !sourceSet.has(sourceName)) return false;
 
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'score') {
-          return b.score - a.score;
-        }
-        if (sortBy === 'title') {
-          return a.job_title.localeCompare(b.job_title);
-        }
-        if (sortBy === 'company') {
-          return a.company.localeCompare(b.company);
-        }
-        return 0;
-      });
-  }, [matches, filterSearch, filterMinScore, filterStatuses, filterModes, filterSources, filterCompanies, sortBy]);
+      // O(1) Set lookup for company
+      if (companySet.size > 0 && !companySet.has(item.company)) return false;
+
+      return true;
+    });
+
+    // Sort only the filtered subset (cheaper than sorting full array)
+    filtered.sort((a, b) => {
+      if (sortBy === 'score') return b.score - a.score;
+      if (sortBy === 'title') return a.job_title.localeCompare(b.job_title);
+      if (sortBy === 'company') return a.company.localeCompare(b.company);
+      return 0;
+    });
+
+    return filtered;
+  }, [matches, debouncedSearch, filterMinScore, filterStatuses, filterModes, filterSources, filterCompanies, sortBy]);
 
   // Reactive selected job selection based on filters
   React.useEffect(() => {
@@ -772,239 +794,279 @@ export default function JobDashboard() {
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
               Job Match Opportunities
             </h3>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Left Column: Amazon-style Filter Panel (3 cols) */}
-              <div className="lg:col-span-3 space-y-5">
-                <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md">
-                  <CardHeader className="pb-3 border-b border-slate-800/80 flex flex-row items-center justify-between space-y-0">
-                    <div className="flex items-center gap-2">
-                      <SlidersHorizontal className="h-4 w-4 text-indigo-400" />
-                      <CardTitle className="text-xs font-bold text-foreground">Filter Opportunities</CardTitle>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleResetFilters}
-                      className="h-7 px-2 text-[10px] font-bold text-slate-400 hover:text-indigo-400 hover:bg-slate-800/50"
+
+            {/* ───── LinkedIn-Style Horizontal Floating Filter Bar ───── */}
+            <div 
+              ref={filterBarRef}
+              className="sticky top-[3.5rem] z-20 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl p-3 shadow-lg shadow-slate-950/60"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search Input */}
+                <div className="relative flex-1 min-w-[180px] max-w-xs">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search jobs..."
+                    className="pl-8 h-8 text-xs bg-slate-900/60 border-slate-800 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={filterSearch}
+                    onChange={(e) => setFilterSearch(e.target.value)}
+                  />
+                  {filterSearch && (
+                    <button
+                      onClick={() => setFilterSearch('')}
+                      className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
                     >
-                      Clear All
-                    </Button>
-                  </CardHeader>
-                  <CardContent className="pt-4 space-y-5 text-xs">
-                    
-                    {/* 1. Keyword Search */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Search matches</span>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                          placeholder="Title, company, or skill..."
-                          className="pl-8 h-9 text-xs bg-slate-950/50 border-slate-800 focus:border-indigo-500 focus:ring-indigo-500"
-                          value={filterSearch}
-                          onChange={(e) => setFilterSearch(e.target.value)}
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Sort Dropdown */}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenFilterDropdown(openFilterDropdown === 'sort' ? null : 'sort')}
+                    className="h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3"
+                  >
+                    <SlidersHorizontal className="h-3 w-3" />
+                    Sort: {sortBy === 'score' ? 'Score' : sortBy === 'title' ? 'Title' : 'Company'}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {openFilterDropdown === 'sort' && (
+                    <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-1 min-w-[120px] animate-in fade-in slide-in-from-top-2 duration-150">
+                      {(['score', 'title', 'company'] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => { setSortBy(opt); setOpenFilterDropdown(null); }}
+                          className={`w-full text-left px-3 py-1.5 text-[11px] rounded font-semibold capitalize transition-colors ${
+                            sortBy === opt ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {opt === 'score' ? 'Score ↓' : opt === 'title' ? 'Title A-Z' : 'Company A-Z'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Min Score Pill */}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenFilterDropdown(openFilterDropdown === 'score' ? null : 'score')}
+                    className="h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3"
+                  >
+                    Min: {filterMinScore}%
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {openFilterDropdown === 'score' && (
+                    <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-3 min-w-[200px] animate-in fade-in slide-in-from-top-2 duration-150">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Min ATS Score</span>
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="range" min={35} max={100} step={5}
+                          value={filterMinScore}
+                          onChange={(e) => setFilterMinScore(Number(e.target.value))}
+                          className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                         />
-                        {filterSearch && (
-                          <button
-                            onClick={() => setFilterSearch('')}
-                            className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+                        <span className="text-[10px] font-bold text-indigo-400 w-8 text-right">{filterMinScore}%</span>
                       </div>
                     </div>
+                  )}
+                </div>
 
-                    {/* 2. Sort By */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sort By</span>
-                      <div className="grid grid-cols-3 gap-1">
-                        {(['score', 'title', 'company'] as const).map((opt) => (
-                          <Button
-                            key={opt}
-                            type="button"
-                            variant="outline"
-                            onClick={() => setSortBy(opt)}
-                            className={`h-7 text-[10px] font-semibold capitalize border-slate-800 px-1 ${
-                              sortBy === opt 
-                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white border-transparent' 
-                                : 'bg-slate-950/20 hover:bg-slate-800 text-slate-300'
-                            }`}
-                          >
-                            {opt === 'score' ? 'Score' : opt === 'title' ? 'Title' : 'Company'}
-                          </Button>
-                        ))}
-                      </div>
+                {/* Fit Status Dropdown */}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenFilterDropdown(openFilterDropdown === 'fit' ? null : 'fit')}
+                    className={`h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3 ${
+                      filterStatuses.length < 3 ? 'border-indigo-500/50 text-indigo-400' : ''
+                    }`}
+                  >
+                    <Filter className="h-3 w-3" />
+                    Match Fit
+                    {filterStatuses.length < 3 && <Badge className="h-4 px-1 text-[8px] bg-indigo-600 border-0">{filterStatuses.length}</Badge>}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {openFilterDropdown === 'fit' && (
+                    <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-2 min-w-[160px] animate-in fade-in slide-in-from-top-2 duration-150">
+                      {[
+                        { label: 'High Fit (75%+)', value: 'High' },
+                        { label: 'Medium Fit (40-74%)', value: 'Medium' },
+                        { label: 'Low Fit (<40%)', value: 'Low' }
+                      ].map((fit) => {
+                        const checked = filterStatuses.includes(fit.value);
+                        return (
+                          <label key={fit.value} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded hover:bg-slate-800">
+                            <input
+                              type="checkbox" checked={checked}
+                              onChange={() => checked
+                                ? setFilterStatuses(filterStatuses.filter(s => s !== fit.value))
+                                : setFilterStatuses([...filterStatuses, fit.value])
+                              }
+                              className="rounded border-slate-700 text-indigo-600 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                            />
+                            <span className="select-none text-[11px] font-medium">{fit.label}</span>
+                          </label>
+                        );
+                      })}
                     </div>
+                  )}
+                </div>
 
-                    {/* 3. Min Score Threshold Slider */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Min ATS Score</span>
-                        <span className="text-[10px] font-bold text-indigo-400 bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-900/40">
-                          {filterMinScore}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={35}
-                        max={100}
-                        step={5}
-                        value={filterMinScore}
-                        onChange={(e) => setFilterMinScore(Number(e.target.value))}
-                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                      <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
-                        <span>35%</span>
-                        <span>50%</span>
-                        <span>75%</span>
-                        <span>100%</span>
-                      </div>
+                {/* Work Mode Dropdown */}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenFilterDropdown(openFilterDropdown === 'mode' ? null : 'mode')}
+                    className={`h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3 ${
+                      filterModes.length < 2 ? 'border-indigo-500/50 text-indigo-400' : ''
+                    }`}
+                  >
+                    <MapPin className="h-3 w-3" />
+                    Work Mode
+                    {filterModes.length < 2 && <Badge className="h-4 px-1 text-[8px] bg-indigo-600 border-0">{filterModes.length}</Badge>}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {openFilterDropdown === 'mode' && (
+                    <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-2 min-w-[150px] animate-in fade-in slide-in-from-top-2 duration-150">
+                      {['Remote', 'On-site/Hybrid'].map((mode) => {
+                        const checked = filterModes.includes(mode);
+                        return (
+                          <label key={mode} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded hover:bg-slate-800">
+                            <input
+                              type="checkbox" checked={checked}
+                              onChange={() => checked
+                                ? setFilterModes(filterModes.filter(m => m !== mode))
+                                : setFilterModes([...filterModes, mode])
+                              }
+                              className="rounded border-slate-700 text-indigo-600 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                            />
+                            <span className="select-none text-[11px] font-medium">{mode}</span>
+                          </label>
+                        );
+                      })}
                     </div>
+                  )}
+                </div>
 
-                    {/* 4. Match Fit Quality */}
-                    <div className="space-y-2 border-t border-slate-800/60 pt-3">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Match Fit</span>
-                      <div className="space-y-1.5">
-                        {[
-                          { label: 'High Fit (75%+)', value: 'High' },
-                          { label: 'Medium Fit (40-74%)', value: 'Medium' },
-                          { label: 'Low Fit (35-39%)', value: 'Low' }
-                        ].map((fit) => {
-                          const checked = filterStatuses.includes(fit.value);
+                {/* Source Dropdown (if sources available) */}
+                {uniqueSources.length > 0 && (
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setOpenFilterDropdown(openFilterDropdown === 'source' ? null : 'source')}
+                      className={`h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3 ${
+                        filterSources.length < uniqueSources.length ? 'border-indigo-500/50 text-indigo-400' : ''
+                      }`}
+                    >
+                      Sources
+                      {filterSources.length < uniqueSources.length && <Badge className="h-4 px-1 text-[8px] bg-indigo-600 border-0">{filterSources.length}</Badge>}
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                    {openFilterDropdown === 'source' && (
+                      <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-2 min-w-[150px] max-h-[200px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+                        {uniqueSources.map((source) => {
+                          const checked = filterSources.includes(source);
                           return (
-                            <label key={fit.value} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                            <label key={source} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded hover:bg-slate-800">
                               <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => {
-                                  if (checked) {
-                                    setFilterStatuses(filterStatuses.filter(s => s !== fit.value));
-                                  } else {
-                                    setFilterStatuses([...filterStatuses, fit.value]);
-                                  }
-                                }}
-                                className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                                type="checkbox" checked={checked}
+                                onChange={() => checked
+                                  ? setFilterSources(filterSources.filter(s => s !== source))
+                                  : setFilterSources([...filterSources, source])
+                                }
+                                className="rounded border-slate-700 text-indigo-600 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
                               />
-                              <span className="select-none text-xs">{fit.label}</span>
+                              <span className="select-none text-[11px] font-medium">{source}</span>
                             </label>
                           );
                         })}
                       </div>
-                    </div>
+                    )}
+                  </div>
+                )}
 
-                    {/* 5. Work Mode */}
-                    <div className="space-y-2 border-t border-slate-800/60 pt-3">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Work Mode</span>
-                      <div className="space-y-1.5">
-                        {['Remote', 'On-site/Hybrid'].map((mode) => {
-                          const checked = filterModes.includes(mode);
+                {/* Company Dropdown (if companies available) */}
+                {uniqueCompanies.length > 0 && (
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setOpenFilterDropdown(openFilterDropdown === 'company' ? null : 'company')}
+                      className={`h-8 text-[10px] font-bold border-slate-800 bg-slate-900/40 hover:bg-slate-800 gap-1.5 px-3 ${
+                        filterCompanies.length < uniqueCompanies.length ? 'border-indigo-500/50 text-indigo-400' : ''
+                      }`}
+                    >
+                      <Briefcase className="h-3 w-3" />
+                      Companies
+                      {filterCompanies.length < uniqueCompanies.length && <Badge className="h-4 px-1 text-[8px] bg-indigo-600 border-0">{filterCompanies.length}</Badge>}
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                    {openFilterDropdown === 'company' && (
+                      <div className="absolute top-full mt-1 left-0 z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-2 min-w-[180px] max-h-[240px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+                        {uniqueCompanies.map((company) => {
+                          const checked = filterCompanies.includes(company);
                           return (
-                            <label key={mode} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                            <label key={company} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors px-2 py-1.5 rounded hover:bg-slate-800">
                               <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => {
-                                  if (checked) {
-                                    setFilterModes(filterModes.filter(m => m !== mode));
-                                  } else {
-                                    setFilterModes([...filterModes, mode]);
-                                  }
-                                }}
-                                className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
+                                type="checkbox" checked={checked}
+                                onChange={() => checked
+                                  ? setFilterCompanies(filterCompanies.filter(c => c !== company))
+                                  : setFilterCompanies([...filterCompanies, company])
+                                }
+                                className="rounded border-slate-700 text-indigo-600 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
                               />
-                              <span className="select-none text-xs">{mode}</span>
+                              <span className="select-none text-[11px] font-medium truncate max-w-[140px]">{company}</span>
                             </label>
                           );
                         })}
                       </div>
-                    </div>
-
-                    {/* 6. Sources */}
-                    {uniqueSources.length > 0 && (
-                      <div className="space-y-2 border-t border-slate-800/60 pt-3">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Sources</span>
-                        <div className="space-y-1.5">
-                          {uniqueSources.map((source) => {
-                            const checked = filterSources.includes(source);
-                            return (
-                              <label key={source} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    if (checked) {
-                                      setFilterSources(filterSources.filter(s => s !== source));
-                                    } else {
-                                      setFilterSources([...filterSources, source]);
-                                    }
-                                  }}
-                                  className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
-                                />
-                                <span className="select-none text-xs">{source}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
                     )}
+                  </div>
+                )}
 
-                    {/* 7. Companies (Amazon-style collapsible list) */}
-                    {uniqueCompanies.length > 0 && (
-                      <div className="space-y-2 border-t border-slate-800/60 pt-3">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Companies</span>
-                        <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                          {uniqueCompanies
-                            .slice(0, showAllCompanies ? undefined : 5)
-                            .map((company) => {
-                              const checked = filterCompanies.includes(company);
-                              return (
-                                <label key={company} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => {
-                                      if (checked) {
-                                        setFilterCompanies(filterCompanies.filter(c => c !== company));
-                                      } else {
-                                        setFilterCompanies([...filterCompanies, company]);
-                                      }
-                                    }}
-                                    className="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 h-3.5 w-3.5 cursor-pointer accent-indigo-500"
-                                  />
-                                  <span className="select-none text-xs truncate max-w-[150px]">{company}</span>
-                                </label>
-                              );
-                            })}
-                        </div>
-                        {uniqueCompanies.length > 5 && (
-                          <button
-                            type="button"
-                            onClick={() => setShowAllCompanies(!showAllCompanies)}
-                            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 mt-1 block"
-                          >
-                            {showAllCompanies ? 'Show Less ▲' : `Show All (${uniqueCompanies.length}) ▼`}
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Middle Column: Matches Feed List (4 cols) */}
-              <div className="lg:col-span-4 md:col-span-5 space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                  <span>Live Matching Feed</span>
+                {/* Spacer + Clear All + Result Count */}
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetFilters}
+                    className="h-7 px-2 text-[10px] font-bold text-slate-500 hover:text-indigo-400 hover:bg-slate-800/50"
+                  >
+                    Clear All
+                  </Button>
                   {matches.length > 0 && (
-                    <Badge className="bg-indigo-950 text-indigo-400 border-indigo-900">
+                    <Badge className="bg-indigo-950 text-indigo-400 border-indigo-900 text-[10px]">
                       {filteredMatches.length === matches.length 
                         ? `${matches.length} Results` 
-                        : `${filteredMatches.length} / ${matches.length} Filtered`}
+                        : `${filteredMatches.length} / ${matches.length}`}
                     </Badge>
                   )}
+                </div>
+              </div>
+            </div>
+            {/* ───── END Filter Bar ───── */}
+            
+            {/* Expanded 2-Column Layout: Feed (5 cols) + Insights (7 cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Matches Feed List — expanded to 5 cols */}
+              <div className="lg:col-span-5 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                  <span>Live Matching Feed</span>
                 </h3>
 
                 {isLoadingData ? (
@@ -1021,7 +1083,7 @@ export default function JobDashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[580px] overflow-y-auto pr-2 scrollbar-hide">
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide">
                     {filteredMatches.map((item) => {
                       const isSelected = selectedMatch?.job_id === item.job_id;
                       const scoreColor = item.score >= 75 ? 'text-emerald-400' : item.score >= 40 ? 'text-amber-400' : 'text-rose-400';
@@ -1072,8 +1134,8 @@ export default function JobDashboard() {
                 )}
               </div>
 
-              {/* Right Column: Expanded Match Details (5 cols) */}
-              <div className="lg:col-span-5 md:col-span-7">
+              {/* Right Column: Expanded Match Details — expanded to 7 cols */}
+              <div className="lg:col-span-7">
                 {selectedMatch ? (
                   <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md h-full flex flex-col justify-between">
                     <div>
