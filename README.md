@@ -203,4 +203,4 @@ Access the Genkit UI at the output address (defaulting to port `4000`).
 
 ## 🛡️ License
 
-This project is privately hosted. Refer to the repository owner details for access rights.
+Selvahari@007 copyrights reserved
