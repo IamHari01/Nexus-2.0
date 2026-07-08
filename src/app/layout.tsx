@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { Suspense } from 'react';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
@@ -19,10 +20,11 @@ import { HistoryProvider } from '@/context/history-context';
 import HistoryList from '@/components/history-list';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { LogOut, LayoutDashboard, FileText } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import Logo from '@/components/logo';
 import Link from 'next/link';
 import PageHeader from '@/components/page-header';
+import SidebarNav from '@/components/sidebar-nav';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -54,35 +56,24 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <HistoryProvider>
-            <SidebarProvider>
-              <Sidebar collapsible="icon">
+            <SidebarProvider defaultOpen={true}>
+              <Sidebar collapsible="icon" className="border-r border-slate-900/60 bg-slate-950/40 backdrop-blur-md">
                 <SidebarHeader>
                   <Logo />
                   <SidebarTrigger />
                 </SidebarHeader>
                 <SidebarContent>
-                  <SidebarMenu className="px-2 pt-2 gap-1">
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild tooltip="Resume Analyzer">
-                        <Link href="/">
-                          <FileText className="h-4 w-4" />
-                          <span>Resume Analyzer</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild tooltip="Job Dashboard">
-                        <Link href="/dashboard">
-                          <LayoutDashboard className="h-4 w-4" />
-                          <span>Job Dashboard</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
+                  <SidebarNav />
                   <div className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest group-data-[collapsible=icon]:hidden mt-4">
                     Analysis History
                   </div>
-                  <HistoryList />
+                  <Suspense fallback={
+                    <div className="px-4 py-2 text-xs text-muted-foreground animate-pulse group-data-[collapsible=icon]:hidden">
+                      Loading history...
+                    </div>
+                  }>
+                    <HistoryList />
+                  </Suspense>
                 </SidebarContent>
                 <SidebarFooter>
                   <SidebarMenu>

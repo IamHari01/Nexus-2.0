@@ -103,6 +103,7 @@ export default function JobDashboard() {
   const [selectedMatch, setSelectedMatch] = React.useState<JobMatchResult | null>(null);
   const [latestAnalysis, setLatestAnalysis] = React.useState<MultiAgentResult | null>(null);
   const [activeTab, setActiveTab] = React.useState<'matches' | 'market' | 'optimizer' | 'recommendations' | 'trace'>('matches');
+  const [revealedSections, setRevealedSections] = React.useState<Record<string, boolean>>({ 'section-matches': true });
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   // Premium Amazon-like Filter States
@@ -229,8 +230,8 @@ export default function JobDashboard() {
       console.error(err);
       toast({
         variant: 'destructive',
-        title: 'Spell of Scrying Failed',
-        description: 'We could not summon the dashboard statistics. Cast Refresh to try again.',
+        title: 'Failed to Load Stats',
+        description: 'Could not fetch dashboard analytics. Please refresh to try again.',
       });
     } finally {
       setIsLoadingData(false);
@@ -241,6 +242,72 @@ export default function JobDashboard() {
     loadDashboardData();
   }, []);
 
+  // Intersection Observer for Scroll-Spy and Reveal Animations
+  React.useEffect(() => {
+    if (!isMounted) return;
+
+    const sections = [
+      'section-matches',
+      'section-market',
+      'section-optimizer',
+      'section-recommendations',
+      'section-trace'
+    ];
+
+    const observerOptions = {
+      root: null,
+      rootMargin: '-12% 0px -45% 0px',
+      threshold: 0.05
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const id = entry.target.id;
+        
+        // Handle Reveal Animation
+        if (entry.isIntersecting) {
+          setRevealedSections((prev) => ({ ...prev, [id]: true }));
+        }
+
+        // Handle Active Tab Highlight (Scroll-Spy)
+        if (entry.isIntersecting) {
+          let tabName: typeof activeTab = 'matches';
+          if (id === 'section-matches') tabName = 'matches';
+          else if (id === 'section-market') tabName = 'market';
+          else if (id === 'section-optimizer') tabName = 'optimizer';
+          else if (id === 'section-recommendations') tabName = 'recommendations';
+          else if (id === 'section-trace') tabName = 'trace';
+          
+          setActiveTab(tabName);
+        }
+      });
+    }, observerOptions);
+
+    sections.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isMounted, latestAnalysis]);
+
+  const handleTabClick = (tabName: typeof activeTab) => {
+    let sectionId = 'section-matches';
+    if (tabName === 'matches') sectionId = 'section-matches';
+    else if (tabName === 'market') sectionId = 'section-market';
+    else if (tabName === 'optimizer') sectionId = 'section-optimizer';
+    else if (tabName === 'recommendations') sectionId = 'section-recommendations';
+    else if (tabName === 'trace') sectionId = 'section-trace';
+
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActiveTab(tabName);
+    }
+  };
+
   // Clear History Handler
   const handleClearHistory = async () => {
     setShowResetModal(false);
@@ -250,8 +317,8 @@ export default function JobDashboard() {
       const data = await res.json();
       if (data.success) {
         toast({
-          title: 'Ritual of Oblivion Complete',
-          description: 'All records of your past quests and matched scrolls have been reduced to ash.',
+          title: 'Match History Cleared',
+          description: 'All records of past job match runs have been successfully cleared.',
         });
         setMatches([]);
         setSelectedMatch(null);
@@ -267,8 +334,8 @@ export default function JobDashboard() {
     } catch (err) {
       toast({
         variant: 'destructive',
-        title: 'Counterspell Blocked Ritual',
-        description: 'The spell of clearing history was disrupted by an unknown force.',
+        title: 'Clear History Failed',
+        description: 'Failed to clear match history. Please try again.',
       });
     }
   };
@@ -303,18 +370,18 @@ export default function JobDashboard() {
 
         setResumeText(fullText);
         setFileName(file.name);
-        toast({ title: 'Rune Scroll Deciphered', description: `${file.name} loaded into the engine.` });
+        toast({ title: 'PDF File Decoded', description: `${file.name} successfully uploaded.` });
       } else if (file.type === 'text/plain') {
         const text = await file.text();
         setResumeText(text);
         setFileName(file.name);
-        toast({ title: 'Parchment Text Absorbed', description: `${file.name} loaded into the engine.` });
+        toast({ title: 'Text File Loaded', description: `${file.name} successfully uploaded.` });
       } else {
-        toast({ variant: 'destructive', title: 'Forbidden Artifact', description: 'Please upload PDF or TXT.' });
+        toast({ variant: 'destructive', title: 'Invalid File Type', description: 'Please upload a PDF (.pdf) or text (.txt) file.' });
       }
     } catch (error) {
       console.error(error);
-      toast({ variant: 'destructive', title: 'Translation Curse', description: 'Could not extract meaning from the scroll. Try pasting your runes directly.' });
+      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not read file content. Please paste your resume text manually.' });
     } finally {
       setIsParsing(false);
       if (event.target) event.target.value = '';
@@ -328,12 +395,12 @@ export default function JobDashboard() {
       if (text) {
         setResumeText(text);
         setFileName('Pasted Resume Text');
-        toast({ title: 'Clipboard Attuned', description: 'Content successfully read from clipboard.' });
+        toast({ title: 'Text Pasted', description: 'Resume text successfully pasted from clipboard.' });
       } else {
-        toast({ variant: 'destructive', title: 'Vessel Empty', description: 'Please copy your resume text first.' });
+        toast({ variant: 'destructive', title: 'Clipboard Empty', description: 'Clipboard is empty. Please copy resume text and try again.' });
       }
     } catch (e) {
-      toast({ variant: 'destructive', title: 'Aura of Shielding', description: 'Please grant clipboard permissions or paste manually.' });
+      toast({ variant: 'destructive', title: 'Clipboard Access Blocked', description: 'Please grant clipboard permissions or paste resume text manually.' });
     }
   };
 
@@ -341,14 +408,14 @@ export default function JobDashboard() {
   const handleRunMatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resumeText.trim()) {
-      toast({ variant: 'destructive', title: 'No Runes Found', description: 'You must provide a resume text scroll before starting the match.' });
+      toast({ variant: 'destructive', title: 'Missing Resume Text', description: 'Please enter or upload your resume text before starting the match.' });
       return;
     }
 
     setIsMatching(true);
     toast({ 
-      title: 'Summoning the Conclave of Agents', 
-      description: 'Chanting the LangGraph incantations to trace your path through the job cosmos...' 
+      title: 'Analyzing Job Matches...', 
+      description: 'Running multi-agent match scoring to search and analyze job listings...' 
     });
 
     try {
@@ -361,23 +428,23 @@ export default function JobDashboard() {
 
       if (res.success && res.result) {
         toast({
-          title: 'Conclave Harmonized!',
-          description: `The multi-agent spirits have mapped your path, revealing target matches and market alchemy.`,
+          title: 'Matching Completed',
+          description: `Matched job analysis is complete. Your matching jobs feed has been refreshed.`,
         });
         await loadDashboardData(true); // Reload stats and results
         setActiveTab('matches'); // Switch to matches view
       } else {
         toast({
           variant: 'destructive',
-          title: 'Conclave Disrupted',
-          description: res.error || 'The agent spirits grew silent. Ritual aborted.',
+          title: 'Matching Failed',
+          description: res.error || 'The matching request failed. Please try again.',
         });
       }
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'Wild Magic Surge (Error)',
-        description: err.message || 'The matching vessel fractured unexpectedly.',
+        title: 'Error Occurred',
+        description: err.message || 'An unexpected error occurred during matching.',
       });
     } finally {
       setIsMatching(false);
@@ -473,7 +540,7 @@ export default function JobDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Column: Aggregator Form (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto scrollbar-hide space-y-6">
           <Card className="border-slate-800 bg-slate-900/30 backdrop-blur-md">
             <CardHeader className="border-b border-slate-800/80 pb-4">
               <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -629,14 +696,14 @@ export default function JobDashboard() {
         </div>
 
         {/* Right Column: Multi-Agent Workspace (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-12">
           
-          {/* Tab Navigation */}
-          <div className="flex border-b border-slate-800/80 gap-2 pb-px overflow-x-auto scrollbar-hide">
+          {/* Sticky Tab Sub-Navigation (Scroll-Spy Menu) */}
+          <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md flex border-b border-slate-800/80 gap-2 pb-2 pt-4 overflow-x-auto scrollbar-hide -mx-2 px-2">
             <button
               type="button"
-              onClick={() => setActiveTab('matches')}
-              className={`pb-3 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
+              onClick={() => handleTabClick('matches')}
+              className={`pb-2.5 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
                 activeTab === 'matches'
                   ? 'border-indigo-500 text-indigo-400 font-extrabold'
                   : 'border-transparent text-muted-foreground hover:text-slate-200'
@@ -646,9 +713,8 @@ export default function JobDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('market')}
-              disabled={!latestAnalysis}
-              className={`pb-3 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+              onClick={() => handleTabClick('market')}
+              className={`pb-2.5 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
                 activeTab === 'market'
                   ? 'border-indigo-500 text-indigo-400 font-extrabold'
                   : 'border-transparent text-muted-foreground hover:text-slate-200'
@@ -658,9 +724,8 @@ export default function JobDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('optimizer')}
-              disabled={!latestAnalysis}
-              className={`pb-3 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+              onClick={() => handleTabClick('optimizer')}
+              className={`pb-2.5 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
                 activeTab === 'optimizer'
                   ? 'border-indigo-500 text-indigo-400 font-extrabold'
                   : 'border-transparent text-muted-foreground hover:text-slate-200'
@@ -670,9 +735,8 @@ export default function JobDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('recommendations')}
-              disabled={!latestAnalysis}
-              className={`pb-3 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+              onClick={() => handleTabClick('recommendations')}
+              className={`pb-2.5 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
                 activeTab === 'recommendations'
                   ? 'border-indigo-500 text-indigo-400 font-extrabold'
                   : 'border-transparent text-muted-foreground hover:text-slate-200'
@@ -682,9 +746,8 @@ export default function JobDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('trace')}
-              disabled={!latestAnalysis}
-              className={`pb-3 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+              onClick={() => handleTabClick('trace')}
+              className={`pb-2.5 text-xs uppercase tracking-wider font-bold transition-all border-b-2 px-2 shrink-0 ${
                 activeTab === 'trace'
                   ? 'border-indigo-500 text-indigo-400 font-extrabold'
                   : 'border-transparent text-muted-foreground hover:text-slate-200'
@@ -694,9 +757,23 @@ export default function JobDashboard() {
             </button>
           </div>
 
-          {/* Tab Content Panels */}
-          {activeTab === 'matches' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
+          {/* Sequential Workspace Sections */}
+          
+          {/* SECTION 1: Job Matches */}
+          <div 
+            id="section-matches" 
+            className={`scroll-mt-20 space-y-4 transition-all duration-700 ease-out ${
+              revealedSections['section-matches'] 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              Job Match Opportunities
+            </h3>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
               {/* Left Column: Amazon-style Filter Panel (3 cols) */}
               <div className="lg:col-span-3 space-y-5">
@@ -1025,6 +1102,13 @@ export default function JobDashboard() {
                               <MapPin className="h-3.5 w-3.5" />
                               <span>{selectedMatch.location}</span>
                             </div>
+                            <div className="pt-3">
+                              <Button asChild size="sm" className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-lg transition-all duration-300">
+                                <a href={selectedMatch.job_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5">
+                                  Apply via Source Listing <ArrowUpRight className="h-4 w-4" />
+                                </a>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                         {renderCircleScore(selectedMatch.score, 65, 5)}
@@ -1155,363 +1239,471 @@ export default function JobDashboard() {
               </div>
 
             </div>
-          )}
+          </div>
 
-          {activeTab === 'market' && latestAnalysis && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="bg-slate-900/20 border-slate-800 backdrop-blur-sm relative overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase tracking-wider font-semibold text-indigo-400">Target Salary Guide</CardDescription>
-                    <CardTitle className="text-3xl font-extrabold text-indigo-300 mt-1">{latestAnalysis.marketTrends.salaryRange}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-xs text-muted-foreground flex items-center gap-1.5 pt-2">
-                    <TrendingUp className="h-4.5 w-4.5 text-indigo-400" /> Typical annual range for regional market
-                  </CardContent>
-                </Card>
+          {/* SECTION 2: Market Trends */}
+          <div 
+            id="section-market" 
+            className={`scroll-mt-20 pt-8 border-t border-slate-900/60 space-y-4 transition-all duration-700 ease-out ${
+              revealedSections['section-market'] 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              Market Trends & Salary Guide
+            </h3>
 
-                <Card className="bg-slate-900/20 border-slate-800 backdrop-blur-sm relative overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase tracking-wider font-semibold text-emerald-400">Demand Intensity</CardDescription>
-                    <CardTitle className="text-3xl font-extrabold text-emerald-400 mt-1">
-                      <span className="flex items-center gap-2">
-                        {latestAnalysis.marketTrends.demandLevel}
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      </span>
+            {latestAnalysis ? (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card className="bg-slate-900/20 border-slate-800 backdrop-blur-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs uppercase tracking-wider font-semibold text-indigo-400">Target Salary Guide</CardDescription>
+                      <CardTitle className="text-3xl font-extrabold text-indigo-300 mt-1">{latestAnalysis.marketTrends.salaryRange}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground flex items-center gap-1.5 pt-2">
+                      <TrendingUp className="h-4.5 w-4.5 text-indigo-400" /> Typical annual range for regional market
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-slate-900/20 border-slate-800 backdrop-blur-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs uppercase tracking-wider font-semibold text-emerald-400">Demand Intensity</CardDescription>
+                      <CardTitle className="text-3xl font-extrabold text-emerald-400 mt-1">
+                        <span className="flex items-center gap-2">
+                          {latestAnalysis.marketTrends.demandLevel}
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground flex items-center gap-1.5 pt-2">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" /> Hiring volume index is currently strong
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <Lightbulb className="h-5 w-5 text-amber-400" />
+                      Market Landscape Overview
                     </CardTitle>
+                    <CardDescription>Synthesized intelligence of target hiring requirements.</CardDescription>
                   </CardHeader>
-                  <CardContent className="text-xs text-muted-foreground flex items-center gap-1.5 pt-2">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" /> Hiring volume index is currently strong
+                  <CardContent className="space-y-6">
+                    <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-indigo-500 pl-4 bg-indigo-950/10 py-3 rounded-r-lg">
+                      {latestAnalysis.marketTrends.summary}
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Briefcase className="h-4 w-4 text-indigo-400" /> Top Hiring Companies
+                        </h4>
+                        <div className="flex flex-col gap-2">
+                          {latestAnalysis.marketTrends.topHiringCompanies.map((c, idx) => (
+                            <div key={idx} className="flex items-center gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80 text-xs text-slate-300">
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                              {c}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Sparkles className="h-4 w-4 text-emerald-400" /> In-Demand Skills
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {latestAnalysis.marketTrends.trendingSkills.map((s, idx) => (
+                            <Badge key={idx} variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs px-2.5 py-1">
+                              {s}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
-
-              <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Lightbulb className="h-5 w-5 text-amber-400" />
-                    Market Landscape Overview
-                  </CardTitle>
-                  <CardDescription>Synthesized intelligence of target hiring requirements.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-indigo-500 pl-4 bg-indigo-950/10 py-3 rounded-r-lg">
-                    {latestAnalysis.marketTrends.summary}
+            ) : (
+              <Card className="border-slate-800 bg-slate-900/10 backdrop-blur-sm relative overflow-hidden border-dashed p-8 text-center flex flex-col items-center justify-center min-h-[260px] group hover:border-slate-700/50 transition-colors duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent opacity-30" />
+                <div className="h-12 w-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner relative z-10 group-hover:scale-105 group-hover:border-indigo-500/30 group-hover:text-indigo-400 transition-all duration-300">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+                <div className="space-y-1.5 max-w-sm relative z-10">
+                  <h3 className="text-sm font-bold text-slate-200">Market Guide Placeholder</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Analyze your resume to unlock target market salary guidelines, demand intensity levels, top hiring companies, and trending keywords.
                   </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Briefcase className="h-4 w-4 text-indigo-400" /> Top Hiring Companies
-                      </h4>
-                      <div className="flex flex-col gap-2">
-                        {latestAnalysis.marketTrends.topHiringCompanies.map((c, idx) => (
-                          <div key={idx} className="flex items-center gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80 text-xs text-slate-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                            {c}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Sparkles className="h-4 w-4 text-emerald-400" /> In-Demand Skills
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {latestAnalysis.marketTrends.trendingSkills.map((s, idx) => (
-                          <Badge key={idx} variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs px-2.5 py-1">
-                            {s}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
+                </div>
               </Card>
-            </div>
-          )}
+            )}
+          </div>
 
-          {activeTab === 'optimizer' && latestAnalysis && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Award className="h-5 w-5 text-indigo-400" />
-                    ATS Performance Evaluation
-                  </CardTitle>
-                  <CardDescription>Custom recommendations to improve resume parsing compatibility.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <p className="text-sm text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                    {latestAnalysis.resumeOptimization.summary}
-                  </p>
+          {/* SECTION 3: Resume Optimizer */}
+          <div 
+            id="section-optimizer" 
+            className={`scroll-mt-20 pt-8 border-t border-slate-900/60 space-y-4 transition-all duration-700 ease-out ${
+              revealedSections['section-optimizer'] 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              Resume Optimizer & ATS Audit
+            </h3>
 
-                  {latestAnalysis.resumeOptimization.skillsToHighlight.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Skills to Feature More Prominently</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {latestAnalysis.resumeOptimization.skillsToHighlight.map((skill, idx) => (
-                          <Badge key={idx} variant="secondary" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-xs px-2.5 py-1">
-                            {skill}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {latestAnalysis.resumeOptimization.wordingImprovements.length > 0 && (
-                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm overflow-hidden">
+            {latestAnalysis ? (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="text-base font-bold flex items-center gap-2">
-                      <RefreshCw className="h-4.5 w-4.5 text-emerald-400" />
-                      ATS Wording Refinement (Before & After)
+                      <Award className="h-5 w-5 text-indigo-400" />
+                      ATS Performance Evaluation
                     </CardTitle>
-                    <CardDescription>Replace generic phrasing with metrics-driven accomplishments.</CardDescription>
+                    <CardDescription>Custom recommendations to improve resume parsing compatibility.</CardDescription>
                   </CardHeader>
-                  <div className="border-t border-slate-800 overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/50 text-muted-foreground uppercase tracking-wider font-bold">
-                          <th className="p-4 w-1/3">Weak / Generic Statement</th>
-                          <th className="p-4 w-1/3">Metrics-Driven Rewrite</th>
-                          <th className="p-4 w-1/3">Optimization Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {latestAnalysis.resumeOptimization.wordingImprovements.map((imp, idx) => (
-                          <tr key={idx} className="border-b border-slate-800/60 hover:bg-slate-900/10 transition-colors">
-                            <td className="p-4 text-rose-400 bg-rose-950/5 font-mono line-through leading-relaxed">{imp.original}</td>
-                            <td className="p-4 text-emerald-400 bg-emerald-950/5 font-semibold leading-relaxed">{imp.suggested}</td>
-                            <td className="p-4 text-slate-400 leading-relaxed">{imp.reason}</td>
+                  <CardContent className="space-y-5">
+                    <p className="text-sm text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                      {latestAnalysis.resumeOptimization.summary}
+                    </p>
+
+                    {latestAnalysis.resumeOptimization.skillsToHighlight.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Skills to Feature More Prominently</h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {latestAnalysis.resumeOptimization.skillsToHighlight.map((skill, idx) => (
+                            <Badge key={idx} variant="secondary" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-xs px-2.5 py-1">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {latestAnalysis.resumeOptimization.wordingImprovements.length > 0 && (
+                  <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <RefreshCw className="h-4.5 w-4.5 text-emerald-400" />
+                        ATS Wording Refinement (Before & After)
+                      </CardTitle>
+                      <CardDescription>Replace generic phrasing with metrics-driven accomplishments.</CardDescription>
+                    </CardHeader>
+                    <div className="border-t border-slate-800 overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-950/50 text-muted-foreground uppercase tracking-wider font-bold">
+                            <th className="p-4 w-1/3">Weak / Generic Statement</th>
+                            <th className="p-4 w-1/3">Metrics-Driven Rewrite</th>
+                            <th className="p-4 w-1/3">Optimization Reason</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )}
-
-              {latestAnalysis.resumeOptimization.formattingSuggestions.length > 0 && (
-                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base font-bold flex items-center gap-2">
-                      <SlidersHorizontal className="h-4.5 w-4.5 text-amber-400" />
-                      Formatting & Layout Checklist
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-2">
-                      {latestAnalysis.resumeOptimization.formattingSuggestions.map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 p-2 bg-slate-950/20 rounded border border-slate-800/40">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
+                        </thead>
+                        <tbody>
+                          {latestAnalysis.resumeOptimization.wordingImprovements.map((imp, idx) => (
+                            <tr key={idx} className="border-b border-slate-800/60 hover:bg-slate-900/10 transition-colors">
+                              <td className="p-4 text-rose-400 bg-rose-950/5 font-mono line-through leading-relaxed">{imp.original}</td>
+                              <td className="p-4 text-emerald-400 bg-emerald-950/5 font-semibold leading-relaxed">{imp.suggested}</td>
+                              <td className="p-4 text-slate-400 leading-relaxed">{imp.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
+                  </Card>
+                )}
 
-          {activeTab === 'recommendations' && latestAnalysis && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-indigo-400" />
-                    Chronological Career Action Plan
-                  </CardTitle>
-                  <CardDescription>Step-by-step priority guide formulated by career strategy agents.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative border-l border-slate-800 pl-6 ml-3 space-y-6">
-                    {latestAnalysis.recommendations.careerActionPlan.map((step, idx) => (
-                      <div key={idx} className="relative">
-                        <span className="absolute -left-9 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 border border-slate-800 text-[10px] font-extrabold text-indigo-400 shadow-md">
-                          0{idx + 1}
-                        </span>
-                        <p className="text-xs text-slate-300 font-semibold leading-relaxed">{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-emerald-400" />
-                    Hiring Manager Outreach Strategy
-                  </CardTitle>
-                  <CardDescription>Copy-paste intro message hooks designed for LinkedIn / Email outreach.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap select-all">
-                    {latestAnalysis.recommendations.applicationStrategy}
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      type="button"
-                      className="text-[11px] h-8 border-slate-700 hover:bg-slate-800"
-                      onClick={() => {
-                        navigator.clipboard.writeText(latestAnalysis.recommendations.applicationStrategy);
-                         toast({ title: 'Spell Copied', description: 'The outreach incantation has been bound to your clipboard.' });
-                      }}
-                    >
-                      <Clipboard className="mr-1.5 h-3.5 w-3.5" />
-                      Copy Outreach Template
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {latestAnalysis.recommendations.interviewPrepTips.length > 0 && (
-                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base font-bold flex items-center gap-2">
-                      <Lightbulb className="h-4.5 w-4.5 text-amber-400" />
-                      Interview Preparation Focus
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-2">
-                      {latestAnalysis.recommendations.interviewPrepTips.map((tip, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 p-3 bg-slate-950/20 rounded-lg border border-slate-800/40">
-                          <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] shrink-0">Tip 0{idx + 1}</Badge>
-                          <span className="leading-relaxed">{tip}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'trace' && latestAnalysis && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-indigo-400 animate-pulse" />
-                    LangGraph Multi-Agent Execution Trace
-                  </CardTitle>
-                  <CardDescription>Real-time telemetry and auditing of agent states, retries, and confidence scores.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col gap-4">
-                    {(() => {
-                      interface CustomTraceLog {
-                        agentName: string;
-                        status: 'pending' | 'success' | 'retry' | 'failed';
-                        message: string;
-                        timestamp: string;
-                        confidence?: number;
-                        durationMs?: number;
-                      }
-                      
-                      const latestLogsMap = new Map<string, CustomTraceLog>();
-                      for (const log of latestAnalysis.logs) {
-                        const existing = latestLogsMap.get(log.agentName);
-                        // Update if:
-                        // 1. Not set yet
-                        // 2. The new log has a final status ('success' or 'failed')
-                        // 3. Or it's a newer retry/pending and the existing status isn't 'success'/'failed'
-                        if (
-                          !existing || 
-                          log.status === 'success' || 
-                          log.status === 'failed' || 
-                          (existing.status !== 'success' && existing.status !== 'failed')
-                        ) {
-                          latestLogsMap.set(log.agentName, log as CustomTraceLog);
-                        }
-                      }
-
-                      const orderedAgents = [
-                        'ResumeParser',
-                        'JobFetcher',
-                        'MarketAnalyzer',
-                        'OpportunityRanker',
-                        'ResumeOptimizer',
-                        'RecommendationGenerator',
-                        'OrchestratorRecovery'
-                      ];
-
-                      const displayLogs = orderedAgents
-                        .map(name => latestLogsMap.get(name))
-                        .filter(Boolean) as CustomTraceLog[];
-
-                      return displayLogs.map((log, idx) => {
-                        const isSuccess = log.status === 'success';
-                        const isFailed = log.status === 'failed';
-                        const isRetry = log.status === 'retry';
-                        
-                        let statusColor = 'text-indigo-400 bg-indigo-950/30 border-indigo-900/50';
-                        let StatusIcon = Loader2;
-                        if (isSuccess) {
-                          statusColor = 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50';
-                          StatusIcon = CheckCircle2;
-                        } else if (isFailed) {
-                          statusColor = 'text-rose-400 bg-rose-950/30 border-rose-900/50';
-                          StatusIcon = XCircle;
-                        } else if (isRetry) {
-                          statusColor = 'text-amber-400 bg-amber-950/30 border-amber-900/50';
-                          StatusIcon = RefreshCw;
-                        }
-
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/40 border-slate-900 hover:border-slate-800 transition-all`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`p-2 rounded-lg border shrink-0 mt-0.5 ${statusColor}`}>
-                                <StatusIcon className={`h-4.5 w-4.5 ${isRetry || log.status === 'pending' ? 'animate-spin' : ''}`} />
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-bold text-xs text-foreground">{log.agentName} Agent</span>
-                                  <span className={`text-[9px] uppercase px-1.5 py-0.25 rounded border font-bold ${statusColor}`}>
-                                    {log.status}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed">{log.message}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 shrink-0 pl-11 md:pl-0 text-[10px] text-muted-foreground font-mono">
-                              {log.durationMs !== undefined && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3.5 w-3.5" /> { (log.durationMs / 1000).toFixed(2) }s
-                                </span>
-                              )}
-                              {log.confidence !== undefined && log.confidence > 0 && (
-                                <span className="flex items-center gap-1 font-bold text-slate-300">
-                                  <Award className="h-3.5 w-3.5" /> { Math.round(log.confidence * 100) }% conf
-                                </span>
-                              )}
-                            </div>
+                {latestAnalysis.resumeOptimization.formattingSuggestions.length > 0 && (
+                  <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <SlidersHorizontal className="h-4.5 w-4.5 text-amber-400" />
+                        Formatting & Layout Checklist
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-2">
+                        {latestAnalysis.resumeOptimization.formattingSuggestions.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 p-2 bg-slate-950/20 rounded border border-slate-800/40">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                            <span>{item}</span>
                           </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </CardContent>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            ) : (
+              <Card className="border-slate-800 bg-slate-900/10 backdrop-blur-sm relative overflow-hidden border-dashed p-8 text-center flex flex-col items-center justify-center min-h-[260px] group hover:border-slate-700/50 transition-colors duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent opacity-30" />
+                <div className="h-12 w-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner relative z-10 group-hover:scale-105 group-hover:border-indigo-500/30 group-hover:text-indigo-400 transition-all duration-300">
+                  <Award className="h-5 w-5" />
+                </div>
+                <div className="space-y-1.5 max-w-sm relative z-10">
+                  <h3 className="text-sm font-bold text-slate-200">ATS Optimizer Placeholder</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Analyze your resume to reveal metrics-driven wording rewrites, core missing skills to emphasize, and layout formatting audits.
+                  </p>
+                </div>
               </Card>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* SECTION 4: Action Plan */}
+          <div 
+            id="section-recommendations" 
+            className={`scroll-mt-20 pt-8 border-t border-slate-900/60 space-y-4 transition-all duration-700 ease-out ${
+              revealedSections['section-recommendations'] 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              Chronological Career Action Plan
+            </h3>
+
+            {latestAnalysis ? (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-indigo-400" />
+                      Chronological Career Action Plan
+                    </CardTitle>
+                    <CardDescription>Step-by-step priority guide formulated by career strategy agents.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative border-l border-slate-800 pl-6 ml-3 space-y-6">
+                      {latestAnalysis.recommendations.careerActionPlan.map((step, idx) => (
+                        <div key={idx} className="relative">
+                          <span className="absolute -left-9 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 border border-slate-800 text-[10px] font-extrabold text-indigo-400 shadow-md">
+                            0{idx + 1}
+                          </span>
+                          <p className="text-xs text-slate-300 font-semibold leading-relaxed">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-emerald-400" />
+                      Hiring Manager Outreach Strategy
+                    </CardTitle>
+                    <CardDescription>Copy-paste intro message hooks designed for LinkedIn / Email outreach.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap select-all">
+                      {latestAnalysis.recommendations.applicationStrategy}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="text-[11px] h-8 border-slate-700 hover:bg-slate-800"
+                        onClick={() => {
+                          navigator.clipboard.writeText(latestAnalysis.recommendations.applicationStrategy);
+                           toast({ title: 'Template Copied', description: 'The outreach template has been copied to your clipboard.' });
+                        }}
+                      >
+                        <Clipboard className="mr-1.5 h-3.5 w-3.5" />
+                        Copy Outreach Template
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {latestAnalysis.recommendations.interviewPrepTips.length > 0 && (
+                  <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <Lightbulb className="h-4.5 w-4.5 text-amber-400" />
+                        Interview Preparation Focus
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-2">
+                        {latestAnalysis.recommendations.interviewPrepTips.map((tip, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300 p-3 bg-slate-950/20 rounded-lg border border-slate-800/40">
+                            <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] shrink-0">Tip 0{idx + 1}</Badge>
+                            <span className="leading-relaxed">{tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            ) : (
+              <Card className="border-slate-800 bg-slate-900/10 backdrop-blur-sm relative overflow-hidden border-dashed p-8 text-center flex flex-col items-center justify-center min-h-[260px] group hover:border-slate-700/50 transition-colors duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent opacity-30" />
+                <div className="h-12 w-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner relative z-10 group-hover:scale-105 group-hover:border-indigo-500/30 group-hover:text-indigo-400 transition-all duration-300">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div className="space-y-1.5 max-w-sm relative z-10">
+                  <h3 className="text-sm font-bold text-slate-200">Chronological Action Plan Placeholder</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Analyze your resume to unlock customized interview preparation guides, application checklists, and outreach communication templates.
+                  </p>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* SECTION 5: Agent Trace */}
+          <div 
+            id="section-trace" 
+            className={`scroll-mt-20 pt-8 border-t border-slate-900/60 space-y-4 transition-all duration-700 ease-out ${
+              revealedSections['section-trace'] 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2 mb-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              LangGraph Multi-Agent Telemetry Trace
+            </h3>
+
+            {latestAnalysis ? (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="border-slate-800 bg-slate-900/20 backdrop-blur-sm">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-indigo-400 animate-pulse" />
+                      LangGraph Multi-Agent Execution Trace
+                    </CardTitle>
+                    <CardDescription>Real-time telemetry and auditing of agent states, retries, and confidence scores.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-4">
+                      {(() => {
+                        interface CustomTraceLog {
+                          agentName: string;
+                          status: 'pending' | 'success' | 'retry' | 'failed';
+                          message: string;
+                          timestamp: string;
+                          confidence?: number;
+                          durationMs?: number;
+                        }
+                        
+                        const latestLogsMap = new Map<string, CustomTraceLog>();
+                        for (const log of latestAnalysis.logs) {
+                          const existing = latestLogsMap.get(log.agentName);
+                          if (
+                            !existing || 
+                            log.status === 'success' || 
+                            log.status === 'failed' || 
+                            (existing.status !== 'success' && existing.status !== 'failed')
+                          ) {
+                            latestLogsMap.set(log.agentName, log as CustomTraceLog);
+                          }
+                        }
+
+                        const orderedAgents = [
+                          'ResumeParser',
+                          'JobFetcher',
+                          'MarketAnalyzer',
+                          'OpportunityRanker',
+                          'ResumeOptimizer',
+                          'RecommendationGenerator',
+                          'OrchestratorRecovery'
+                        ];
+
+                        const displayLogs = orderedAgents
+                          .map(name => latestLogsMap.get(name))
+                          .filter(Boolean) as CustomTraceLog[];
+
+                        return displayLogs.map((log, idx) => {
+                          const isSuccess = log.status === 'success';
+                          const isFailed = log.status === 'failed';
+                          const isRetry = log.status === 'retry';
+                          
+                          let statusColor = 'text-indigo-400 bg-indigo-950/30 border-indigo-900/50';
+                          let StatusIcon = Loader2;
+                          if (isSuccess) {
+                            statusColor = 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50';
+                            StatusIcon = CheckCircle2;
+                          } else if (isFailed) {
+                            statusColor = 'text-rose-400 bg-rose-950/30 border-rose-900/50';
+                            StatusIcon = XCircle;
+                          } else if (isRetry) {
+                            statusColor = 'text-amber-400 bg-amber-950/30 border-amber-900/50';
+                            StatusIcon = RefreshCw;
+                          }
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className="p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/40 border-slate-900 hover:border-slate-800 transition-all"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded-lg border shrink-0 mt-0.5 ${statusColor}`}>
+                                  <StatusIcon className={`h-4.5 w-4.5 ${isRetry || log.status === 'pending' ? 'animate-spin' : ''}`} />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-xs text-foreground">{log.agentName} Agent</span>
+                                    <span className={`text-[9px] uppercase px-1.5 py-0.25 rounded border font-bold ${statusColor}`}>
+                                      {log.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">{log.message}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4 shrink-0 pl-11 md:pl-0 text-[10px] text-muted-foreground font-mono">
+                                {log.durationMs !== undefined && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5" /> { (log.durationMs / 1000).toFixed(2) }s
+                                  </span>
+                                )}
+                                {log.confidence !== undefined && log.confidence > 0 && (
+                                  <span className="flex items-center gap-1 font-bold text-slate-300">
+                                    <Award className="h-3.5 w-3.5" /> { Math.round(log.confidence * 100) }% conf
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <Card className="border-slate-800 bg-slate-900/10 backdrop-blur-sm relative overflow-hidden border-dashed p-8 text-center flex flex-col items-center justify-center min-h-[260px] group hover:border-slate-700/50 transition-colors duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent opacity-30" />
+                <div className="h-12 w-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner relative z-10 group-hover:scale-105 group-hover:border-indigo-500/30 group-hover:text-indigo-400 transition-all duration-300">
+                  <Activity className="h-5 w-5" />
+                </div>
+                <div className="space-y-1.5 max-w-sm relative z-10">
+                  <h3 className="text-sm font-bold text-slate-200">LangGraph Telemetry Placeholder</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Analyze your resume to inspect real-time log tracking, token usage, agent confidence rankings, and execution times.
+                  </p>
+                </div>
+              </Card>
+            )}
+          </div>
 
         </div>
 
       </div>
 
-      {/* Custom Fantasy Reset Confirm Modal */}
+      {/* Reset Confirmation Modal */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full overflow-hidden shadow-[0_0_50px_rgba(244,63,94,0.15)] animate-in zoom-in-95 duration-200">
@@ -1520,10 +1712,10 @@ export default function JobDashboard() {
                 <div className="p-2 bg-rose-500/10 border border-rose-500/25 rounded-lg">
                   <Trash2 className="h-6 w-6" />
                 </div>
-                <h3 className="text-lg font-extrabold text-foreground">Cast Spell of Oblivion?</h3>
+                <h3 className="text-lg font-extrabold text-foreground">Clear Job Match History?</h3>
               </div>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Are you sure you want to cast the ritual of obliteration? All matching history scrolls, career paths, and agent telemetry will be turned to ash and lost in the void forever.
+                Are you sure you want to clear your job match history? This will delete all saved job matches, matching stats, and recommendation analytics permanently.
               </p>
               <div className="flex gap-3 justify-end pt-2">
                 <Button 
@@ -1532,14 +1724,14 @@ export default function JobDashboard() {
                   onClick={() => setShowResetModal(false)}
                   className="border-slate-700 text-slate-300 hover:bg-slate-800/40 text-xs font-bold"
                 >
-                  Abort Ritual
+                  Cancel
                 </Button>
                 <Button 
                   type="button" 
                   onClick={handleClearHistory}
                   className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-900/30"
                 >
-                  Incinerate History
+                  Clear History
                 </Button>
               </div>
             </div>

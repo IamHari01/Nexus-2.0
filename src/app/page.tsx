@@ -29,7 +29,7 @@ const AnalysisForm = dynamic(
       <div className="flex h-[400px] w-full items-center justify-center rounded-xl border border-dashed bg-slate-900/10 border-slate-800">
         <div className="flex flex-col items-center gap-2">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-          <p className="text-sm text-slate-400 font-mono animate-pulse">Awakening the Nexus Conclave...</p>
+          <p className="text-sm text-slate-400 font-mono animate-pulse">Initializing NEXUS Engine...</p>
         </div>
       </div>
     ),

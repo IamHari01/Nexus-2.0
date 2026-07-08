@@ -22,6 +22,7 @@ export interface HistoryItem {
 interface HistoryContextType {
   history: HistoryItem[];
   addHistoryItem: (result: AnalysisResult) => string;
+  deleteHistoryItem: (id: string) => void;
   savedFormData: SavedFormData | null;
   saveFormData: (data: SavedFormData) => void;
 }
@@ -43,6 +44,21 @@ export const HistoryProvider = ({ children }: { children: ReactNode }) => {
           console.error('Failed to parse saved form data', e);
         }
       }
+
+      const savedHistory = localStorage.getItem('nexus_history');
+      if (savedHistory) {
+        try {
+          setHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error('Failed to parse saved history', e);
+        }
+      }
+
+      // Clear the dashboard matched job feed database on fresh app load or browser reload/refresh.
+      // This ensures details vanish on full reload, but are cached during client-side tab navigations.
+      fetch('/api/jobs?action=clear').catch(err => {
+        console.error('Failed to clear matches on boot:', err);
+      });
     }
   }, []);
 
@@ -62,14 +78,31 @@ export const HistoryProvider = ({ children }: { children: ReactNode }) => {
     };
     
     setHistory(prevHistory => {
-      const newHistory = [newHistoryItem, ...prevHistory.filter(h => h.id !== newHistoryItem.id)].slice(0, 10);
+      // Filter out duplicate queries with same company & job_title to avoid history cluttering
+      const filtered = prevHistory.filter(
+        h => !(h.job_title === result.job_title && h.company === result.company)
+      );
+      const newHistory = [newHistoryItem, ...filtered].slice(0, 10);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nexus_history', JSON.stringify(newHistory));
+      }
       return newHistory;
     });
     return newHistoryItem.id;
   };
 
+  const deleteHistoryItem = (id: string) => {
+    setHistory(prevHistory => {
+      const newHistory = prevHistory.filter(item => item.id !== id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nexus_history', JSON.stringify(newHistory));
+      }
+      return newHistory;
+    });
+  };
+
   return (
-    <HistoryContext.Provider value={{ history, addHistoryItem, savedFormData, saveFormData }}>
+    <HistoryContext.Provider value={{ history, addHistoryItem, deleteHistoryItem, savedFormData, saveFormData }}>
       {children}
     </HistoryContext.Provider>
   );

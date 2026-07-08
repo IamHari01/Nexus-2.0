@@ -138,6 +138,13 @@ export default function AnalysisResults({ result }: AnalysisResultsProps) {
                 <MapPin className="h-3.5 w-3.5" />
                 <span>{result.location}</span>
               </div>
+              <div className="pt-3">
+                <Button asChild size="sm" className="h-9 text-xs font-extrabold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-lg transition-all duration-300">
+                  <a href={result.job_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5">
+                    Final Application Step <ArrowUpRight className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
             </div>
             <MatchBadge status={result.match_status} />
           </div>

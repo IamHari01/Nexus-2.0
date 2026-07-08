@@ -57,6 +57,7 @@ export interface JobMatchResult {
   publisher?: string;
   benefits?: string[];
   required_skills?: string[];
+  source?: string;
 }
 
 export interface DashboardStats {

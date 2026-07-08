@@ -194,6 +194,7 @@ export async function matchJobs(
             publisher: item.job.publisher,
             benefits: item.job.benefits,
             required_skills: item.job.required_skills,
+            source: item.job.source,
           };
         } catch (err) {
           console.error(`Deep AI matching failed for job: ${item.job.id}. Using fast match fallback.`, err);
@@ -217,6 +218,7 @@ export async function matchJobs(
             publisher: item.job.publisher,
             benefits: item.job.benefits,
             required_skills: item.job.required_skills,
+            source: item.job.source,
           };
         }
       })
@@ -246,6 +248,7 @@ export async function matchJobs(
       publisher: item.job.publisher,
       benefits: item.job.benefits,
       required_skills: item.job.required_skills,
+      source: item.job.source,
     });
   }
 

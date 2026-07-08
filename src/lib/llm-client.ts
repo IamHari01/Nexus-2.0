@@ -1,4 +1,22 @@
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+
+let cachedSecurityPrompt: string | null = null;
+
+function loadSecuritySystemPrompt(): string {
+  if (cachedSecurityPrompt) return cachedSecurityPrompt;
+  try {
+    const filePath = path.join(process.cwd(), 'src/lib/NEXUS_SECURITY_SYSTEM_PROMPT.md');
+    if (fs.existsSync(filePath)) {
+      cachedSecurityPrompt = fs.readFileSync(filePath, 'utf-8');
+      return cachedSecurityPrompt;
+    }
+  } catch (err) {
+    console.error('[LLM Client] Failed to load security system prompt:', err);
+  }
+  return '';
+}
 
 // ---------------------------------------------------------
 // Rate Limit / Quota Error Detection
@@ -226,7 +244,14 @@ export async function generateStructuredOutput<T>(params: {
 
     try {
       const messages = [];
-      if (params.systemInstruction) {
+      const securitySystemPrompt = loadSecuritySystemPrompt();
+
+      if (securitySystemPrompt) {
+        const fullSystemInstruction = params.systemInstruction
+          ? `${securitySystemPrompt}\n\n=========================================\nADDITIONAL AGENT CONTEXT & SPECIFICATIONS:\n${params.systemInstruction}`
+          : securitySystemPrompt;
+        messages.push({ role: 'system', content: fullSystemInstruction });
+      } else if (params.systemInstruction) {
         messages.push({ role: 'system', content: params.systemInstruction });
       }
       
