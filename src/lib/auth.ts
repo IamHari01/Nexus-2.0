@@ -1,8 +1,18 @@
-import { NextAuthOptions } from 'next-auth';
+import { NextAuthOptions, DefaultSession } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import { env } from './env';
+import { logger } from './logger';
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+    } & DefaultSession["user"]
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,38 +28,30 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Attempt MongoDB connection
-          if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes('<username>')) {
-            await dbConnect();
-            const user = await User.findOne({
-              $or: [
-                { email: credentials.identifier },
-                { mobile: credentials.identifier },
-              ],
-            });
+          await dbConnect();
+          const user = await User.findOne({
+            $or: [
+              { email: credentials.identifier },
+              { mobile: credentials.identifier },
+            ],
+          });
 
-            if (user) {
-              const isValid = await bcrypt.compare(credentials.password, user.password);
-              if (!isValid) {
-                throw new Error('Invalid password');
-              }
-              return {
-                id: user._id.toString(),
-                email: user.email,
-                name: user.mobile || user.email,
-              };
+          if (user) {
+            const isValid = await bcrypt.compare(credentials.password, user.password);
+            if (!isValid) {
+              throw new Error('Invalid password');
             }
+            return {
+              id: user._id.toString(),
+              email: user.email,
+              name: user.mobile || user.email,
+            };
           }
+          throw new Error('No user found');
         } catch (e) {
-          console.warn('MongoDB auth failed, falling back to mock authentication', e);
+          logger.error('Authentication error', e);
+          throw new Error('Invalid credentials');
         }
-
-        // Fallback: accept any login to allow the app to work without a database
-        return {
-          id: 'mock-user-12345',
-          email: credentials.identifier.includes('@') ? credentials.identifier : 'test@example.com',
-          name: credentials.identifier,
-        };
       },
     }),
   ],
@@ -65,7 +67,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
+        session.user.id = token.id as string;
       }
       return session;
     },
@@ -73,5 +75,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
   },
-  secret: process.env.NEXTAUTH_SECRET || 'nexus-fallback-secret-key-12345',
+  secret: env.NEXTAUTH_SECRET,
 };

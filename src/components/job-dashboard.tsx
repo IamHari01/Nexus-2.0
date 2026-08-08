@@ -75,7 +75,7 @@ export default function JobDashboard() {
   React.useEffect(() => {
     if (isMounted && typeof window !== 'undefined') {
       const saved = localStorage.getItem('nexus_form_data');
-      let currentData: any = {};
+      let currentData: Record<string, unknown> = {};
       if (saved) {
         try {
           currentData = JSON.parse(saved);
@@ -379,13 +379,13 @@ export default function JobDashboard() {
 
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
+        const pdf = (await loadingTask.promise) as any;
         
         let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
+          fullText += textContent.items.map((item: { str: string }) => item.str).join(' ') + '\n';
         }
         
         if (!fullText.trim()) throw new Error('Empty PDF content');

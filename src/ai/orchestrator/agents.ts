@@ -1,5 +1,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 import { 
   CandidateProfile, 
   Job, 
@@ -66,17 +67,18 @@ async function executeWithRetry<T>(
       logs,
       retries
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const duration = Date.now() - startTime;
-    console.error(`[Orchestrator] Node "${nodeName}" failed on attempt ${attemptCount + 1}:`, err);
+    logger.error(`[Orchestrator] Node "${nodeName}" failed on attempt ${attemptCount + 1}`, err);
 
     // Rate limit errors should NOT be retried — propagate immediately
-    if (err instanceof RateLimitError || err?.name === 'RateLimitError') {
+    if (err instanceof RateLimitError || (err as Error)?.name === 'RateLimitError') {
+      const rateLimitErr = err as RateLimitError;
       logs = logTrace(
         logs,
         nodeName,
         'failed',
-        `⚠ API quota exhausted: ${err.userMessage || err.message}`,
+        `⚠ API quota exhausted: ${rateLimitErr.userMessage || rateLimitErr.message}`,
         0,
         duration
       );
@@ -84,12 +86,13 @@ async function executeWithRetry<T>(
     }
     
     if (attemptCount < maxRetries) {
+      const errorMsg = (err as Error)?.message || String(err);
       retries[nodeName] = attemptCount + 1;
       logs = logTrace(
         logs, 
         nodeName, 
         'retry', 
-        `Execution encountered error: ${err.message || err}. Retrying in 1s...`, 
+        `Execution encountered error: ${errorMsg}. Retrying in 1s...`, 
         0, 
         duration
       );
@@ -97,11 +100,12 @@ async function executeWithRetry<T>(
       await new Promise(resolve => setTimeout(resolve, 1000));
       return executeWithRetry(nodeName, fn, { logs, retries }, maxRetries);
     } else {
+      const errorMsg = (err as Error)?.message || String(err);
       logs = logTrace(
         logs, 
         nodeName, 
         'failed', 
-        `Agent execution failed after ${maxRetries + 1} attempts. Error: ${err.message || err}`, 
+        `Agent execution failed after ${maxRetries + 1} attempts. Error: ${errorMsg}`, 
         0, 
         duration
       );
@@ -179,8 +183,8 @@ export async function runResumeParserAgent(
         """
         
         Extract name, email, skills, technologies, years of experience, education details, certifications, and preferred roles.`,
-        schema: CandidateProfileSchema as any
-      }) as any;
+        schema: CandidateProfileSchema as unknown as z.ZodSchema<CandidateProfile>
+      });
       
       // Calculate parsing confidence based on completeness of fields
       let score = 0;
@@ -278,8 +282,8 @@ export async function runMarketAnalyzerAgent(
         - Experience Years: ${profile.experience_years ?? 'Not specified'}
         
         Generate a structured analysis containing demandLevel (High/Medium/Low), salaryRange, topHiringCompanies, trendingSkills, and a market summary.`,
-        schema: MarketTrendsSchema as any
-      }) as any;
+        schema: MarketTrendsSchema as unknown as z.ZodSchema<MarketTrends>
+      });
       const confidence = 0.95; // LLM analytical confidence
 
       return {
@@ -386,8 +390,8 @@ export async function runResumeOptimizerAgent(
         2. Identify candidate skills to highlight more prominently.
         3. Suggest 2-3 specific bullet-point wording rewrites (wordingImprovements) replacing a typical generic statement (original) with a metrics-driven, action-verb-oriented bullet point (suggested), explaining why (reason).
         4. Give general layout or formatting suggestions.`,
-        schema: ResumeOptimizationSchema as any
-      }) as any;
+        schema: ResumeOptimizationSchema as unknown as z.ZodSchema<ResumeOptimization>
+      });
       const confidence = 0.9;
 
       return {
@@ -445,8 +449,8 @@ export async function runRecommendationGeneratorAgent(
         1. careerActionPlan: 3-5 specific, chronological next steps (e.g. upskill in X, network on LinkedIn for Y, tailor resume for Z).
         2. applicationStrategy: A precise tactic for applying to these roles (e.g., outreach message hook to hiring manager, portfolio item to highlight).
         3. interviewPrepTips: Top 3 technical/behavioral focus areas for interviews in this category.`,
-        schema: PersonalizedRecommendationsSchema as any
-      }) as any;
+        schema: PersonalizedRecommendationsSchema as unknown as z.ZodSchema<PersonalizedRecommendations>
+      });
       const confidence = 0.95;
 
       return {

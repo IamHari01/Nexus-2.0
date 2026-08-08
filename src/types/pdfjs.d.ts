@@ -2,7 +2,7 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
   export const GlobalWorkerOptions: {
     workerSrc: string;
   };
-  export function getDocument(src: any): {
-    promise: Promise<any>;
+  export function getDocument(src: string | Uint8Array | ArrayBuffer | Record<string, unknown>): {
+    promise: Promise<unknown>;
   };
 }

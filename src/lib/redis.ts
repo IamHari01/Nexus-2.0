@@ -1,12 +1,15 @@
 import Redis from 'ioredis';
+import { env } from './env';
 
-const redisUrl = process.env.REDIS_URL;
+const redisUrl = env.REDIS_URL;
 
-// Ensure we only create a single Redis instance in development to avoid connection leaks
-const globalForRedis = global as unknown as { redis: Redis | undefined };
+declare global {
+  // eslint-disable-next-line no-var
+  var redisGlobal: Redis | undefined;
+}
 
 export const redis =
-  globalForRedis.redis ??
+  global.redisGlobal ??
   new Redis(redisUrl || 'redis://localhost:6379');
 
-if (process.env.NODE_ENV !== 'production') globalForRedis.redis = redis;
+if (env.NODE_ENV !== 'production') global.redisGlobal = redis;

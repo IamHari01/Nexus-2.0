@@ -76,8 +76,8 @@ const findRelatedJobsFlow = ai.defineFlow(
 
     const result = await generateStructuredOutput({
       prompt: promptText,
-      schema: FindRelatedJobsOutputSchema as any
-    }) as any;
+      schema: FindRelatedJobsOutputSchema as unknown as z.ZodSchema<FindRelatedJobsOutput>
+    });
 
     // Post-process fictional job links to make them high-intent search URLs
     if (result.related_jobs && Array.isArray(result.related_jobs)) {
@@ -90,6 +90,6 @@ const findRelatedJobsFlow = ai.defineFlow(
       });
     }
 
-    return result as any;
+    return result;
   }
 );

@@ -197,8 +197,8 @@ const displayShortlistingProbabilityFlow = ai.defineFlow(
 
     const result = await generateStructuredOutput({
       prompt: promptText,
-      schema: ShortlistingProbabilityOutputSchema as any
-    }) as any;
+      schema: ShortlistingProbabilityOutputSchema as unknown as z.ZodSchema<ShortlistingProbabilityOutput>
+    });
 
     // Post-process to fix decimal probabilities (e.g. 0.85 -> 85)
     if (result.shortlist_probability > 0 && result.shortlist_probability <= 1) {
@@ -222,6 +222,6 @@ const displayShortlistingProbabilityFlow = ai.defineFlow(
       result.job_link = `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}`;
     }
 
-    return result as any;
+    return result;
   }
 );

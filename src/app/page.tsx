@@ -92,7 +92,7 @@ function HomeContent() {
         toast({
           variant: isQuotaError ? 'default' : 'destructive',
           title: isQuotaError ? '⚠️ API Quota Limit Reached' : 'Analysis Failed',
-          description: initialResult.error || 'Check your Groq API key and try again.',
+          description: initialResult.error || 'Check your Portkey API key and try again.',
         });
         setIsLoading(false);
       }

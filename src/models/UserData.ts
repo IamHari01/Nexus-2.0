@@ -2,9 +2,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUserData extends Document {
   userId: mongoose.Types.ObjectId;
-  jobs: any[];
-  matches: any[];
-  latestAnalysis: any;
+  jobs: unknown[];
+  matches: unknown[];
+  latestAnalysis: unknown;
   updatedAt: Date;
 }
 

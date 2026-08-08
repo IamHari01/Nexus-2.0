@@ -1,5 +1,4 @@
-import { config } from 'dotenv';
-config();
+import 'dotenv/config';
 
-import '@/ai/flows/display-shortlisting-probability.ts';
-import '@/ai/flows/find-related-jobs.ts';
+import '@/ai/flows/display-shortlisting-probability';
+import '@/ai/flows/find-related-jobs';

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import { logger } from './logger';
+import { env } from './env';
 
 let cachedSecurityPrompt: string | null = null;
 
@@ -10,10 +12,10 @@ function loadSecuritySystemPrompt(): string {
     const filePath = path.join(process.cwd(), 'src/lib/NEXUS_SECURITY_SYSTEM_PROMPT.md');
     if (fs.existsSync(filePath)) {
       cachedSecurityPrompt = fs.readFileSync(filePath, 'utf-8');
-      return cachedSecurityPrompt;
+      return cachedSecurityPrompt as string;
     }
   } catch (err) {
-    console.error('[LLM Client] Failed to load security system prompt:', err);
+    logger.error('Failed to load security system prompt', err);
   }
   return '';
 }
@@ -49,7 +51,7 @@ export class RateLimitError extends Error {
     this.userMessage = userMessage;
 
     if (rawMessage) {
-      console.warn(`[LLM Client] Rate limit details from ${provider}: ${rawMessage}`);
+      logger.warn(`Rate limit details from ${provider}: ${rawMessage}`);
     }
   }
 }
@@ -140,7 +142,7 @@ let currentProviderIndex = 0;
  * Automatically converts Zod schema to a friendly JSON template representation
  * to instruct the LLM on the exact JSON schema it needs to conform to.
  */
-function zodToJSONTemplate(schema: any): any {
+function zodToJSONTemplate(schema: z.ZodTypeAny): unknown {
   if (!schema) return "any";
   
   const def = schema._def;
@@ -149,8 +151,9 @@ function zodToJSONTemplate(schema: any): any {
   const typeName = def.typeName;
   
   if (typeName === 'ZodObject') {
-    const shape = schema.shape;
-    const result: any = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const shape = (schema as any).shape;
+    const result: Record<string, unknown> = {};
     for (const key of Object.keys(shape)) {
       result[key] = zodToJSONTemplate(shape[key]);
     }
@@ -158,19 +161,19 @@ function zodToJSONTemplate(schema: any): any {
   }
   
   if (typeName === 'ZodArray') {
-    return [zodToJSONTemplate(def.type)];
+    return [zodToJSONTemplate(def.type as z.ZodTypeAny)];
   }
   
   if (typeName === 'ZodEnum') {
-    return def.values.join(' | ');
+    return (def as z.ZodEnumDef).values.join(' | ');
   }
   
   if (typeName === 'ZodOptional' || typeName === 'ZodNullable') {
-    return zodToJSONTemplate(def.innerType);
+    return zodToJSONTemplate((def as z.ZodOptionalDef<z.ZodTypeAny>).innerType);
   }
   
   if (typeName === 'ZodEffects') {
-    return zodToJSONTemplate(def.schema);
+    return zodToJSONTemplate((def as z.ZodEffectsDef<z.ZodTypeAny>).schema);
   }
 
   // Basic types
@@ -186,151 +189,101 @@ export async function generateStructuredOutput<T>(params: {
   systemInstruction?: string;
   schema: z.ZodSchema<T>;
 }): Promise<T> {
-  // Define all available providers in preferred priority order
-  const providers: LLMProvider[] = [
-    {
-      name: 'Groq (Primary)',
-      type: 'groq' as const,
-      apiKey: process.env.GROQ_API_KEY,
-      model: 'llama-3.3-70b-versatile',
-      baseURL: 'https://api.groq.com/openai/v1'
-    },
-    {
-      name: 'Groq (Key 2)',
-      type: 'groq' as const,
-      apiKey: process.env.GROQ_API_KEY2,
-      model: 'llama-3.3-70b-versatile',
-      baseURL: 'https://api.groq.com/openai/v1'
-    },
-    {
-      name: 'Groq (Key 3)',
-      type: 'groq' as const,
-      apiKey: process.env.GROQ_API_KEY3,
-      model: 'llama-3.3-70b-versatile',
-      baseURL: 'https://api.groq.com/openai/v1'
-    },
-    {
-      name: 'Cerebras',
-      type: 'cerebras' as const,
-      apiKey: process.env.CEREBRAS_API_KEY,
-      model: 'llama-3.3-70b',
-      baseURL: 'https://api.cerebras.ai/v1'
-    },
-    {
-      name: 'Hugging Face',
-      type: 'huggingface' as const,
-      apiKey: process.env.HUGGINGFACE_API_KEY,
-      model: 'meta-llama/Llama-3.3-70B-Instruct',
-      baseURL: 'https://router.huggingface.co/v1'
-    }
-  ].filter(p => !!p.apiKey && p.apiKey.trim() !== '');
+  const portkeyApiKey = env.PORTKEY_API_KEY;
 
-  if (providers.length === 0) {
-    throw new Error('No LLM API keys are configured in your environment (.env).');
-  }
-
-  let lastError: any = null;
-  const maxAttempts = providers.length * 2; // Allow fallback cycles
+  // Modern Portkey Integration: Define the multi-agent loadbalance & fallback config inline
+  const portkeyConfig = {
+    retry: {
+      attempts: 5,
+      on_status_codes: [429, 500, 502, 503, 504]
+    },
+    strategy: {
+      mode: "loadbalance"
+    },
+    targets: [
+      { virtual_key: "kubernetes-rag-1", weight: 1 },
+      { virtual_key: "kubernetes-rag-2", weight: 1 },
+      { virtual_key: "kubernetes-rag-3", weight: 1 },
+      { virtual_key: "kubernetes-rag-4", weight: 1 }
+    ]
+  };
 
   // Generate the JSON template instructions automatically
   const jsonStructureTemplate = zodToJSONTemplate(params.schema);
   const jsonInstruction = `\n\nIMPORTANT: You must return ONLY a raw JSON object conforming exactly to the following JSON structure template:\n${JSON.stringify(jsonStructureTemplate, null, 2)}\n\nDo NOT include any markdown code blocks (such as \`\`\`json), no introductory text, and no conversational wrap. Return valid JSON only.`;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const providerIndex = (currentProviderIndex + attempt) % providers.length;
-    const provider = providers[providerIndex];
-    
-    console.log(`[LLM Client] Attempting generation with provider: ${provider.name} (Model: ${provider.model})`);
+  try {
+    const messages = [];
+    const securitySystemPrompt = loadSecuritySystemPrompt();
 
-    try {
-      const messages = [];
-      const securitySystemPrompt = loadSecuritySystemPrompt();
-
-      if (securitySystemPrompt) {
-        const fullSystemInstruction = params.systemInstruction
-          ? `${securitySystemPrompt}\n\n=========================================\nADDITIONAL AGENT CONTEXT & SPECIFICATIONS:\n${params.systemInstruction}`
-          : securitySystemPrompt;
-        messages.push({ role: 'system', content: fullSystemInstruction });
-      } else if (params.systemInstruction) {
-        messages.push({ role: 'system', content: params.systemInstruction });
-      }
-      
-      const userPrompt = `${params.prompt}${jsonInstruction}`;
-      messages.push({ role: 'user', content: userPrompt });
-
-      const body: any = {
-        model: provider.model,
-        messages,
-        temperature: 0.1,
-      };
-
-      if (provider.type === 'groq' || provider.type === 'cerebras') {
-        body.response_format = { type: 'json_object' };
-      }
-
-      const response = await fetch(`${provider.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${provider.apiKey}`
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-
-        // Detect rate limit / quota exhaustion errors
-        if (isRateLimitError(response.status, errText)) {
-          const retryAfter = extractRetryAfterSeconds(response.headers);
-          console.warn(
-            `[LLM Client] ⚠ Rate limit / quota exceeded on ${provider.name} (HTTP ${response.status}). ` +
-            `Retry-After: ${retryAfter ?? 'unknown'}s. Response: ${errText.slice(0, 300)}`
-          );
-          throw new RateLimitError(provider.name, retryAfter, errText.slice(0, 500));
-        }
-
-        throw new Error(`API returned status ${response.status}: ${errText}`);
-      }
-
-      const resJson = await response.json();
-      const text = resJson.choices?.[0]?.message?.content;
-      if (!text) {
-        throw new Error('Empty content in API response.');
-      }
-
-      let cleanedText = text.trim();
-      if (cleanedText.startsWith('```')) {
-        cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-      }
-
-      console.log(`[LLM Client] Successfully received response from ${provider.name}. Parsing content...`);
-      const parsedData = JSON.parse(cleanedText);
-      const validated = params.schema.parse(parsedData);
-
-      // Lock on this provider for subsequent requests if it succeeds
-      currentProviderIndex = providerIndex;
-      return validated;
-
-    } catch (err: any) {
-      console.warn(`[LLM Client] Provider ${provider.name} failed: ${err.message || JSON.stringify(err)}`);
-      lastError = err;
-
-      // If this is a rate limit error, log a clear warning and continue to next provider
-      if (err instanceof RateLimitError) {
-        console.warn(`[LLM Client] ⚠ ${provider.name}: Free-tier quota exhausted. Falling back to next provider...`);
-      }
+    if (securitySystemPrompt) {
+      const fullSystemInstruction = params.systemInstruction
+        ? `${securitySystemPrompt}\n\n=========================================\nADDITIONAL AGENT CONTEXT & SPECIFICATIONS:\n${params.systemInstruction}`
+        : securitySystemPrompt;
+      messages.push({ role: 'system', content: fullSystemInstruction });
+    } else if (params.systemInstruction) {
+      messages.push({ role: 'system', content: params.systemInstruction });
     }
+    
+    const userPrompt = `${params.prompt}${jsonInstruction}`;
+    messages.push({ role: 'user', content: userPrompt });
+
+    const body = {
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      temperature: 0.1,
+      response_format: { type: 'json_object' }
+    };
+
+    logger.debug(`Attempting generation with Portkey Multi-Agent Gateway`);
+
+    const response = await fetch(`https://api.portkey.ai/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${portkeyApiKey}`,
+        'x-portkey-config': JSON.stringify(portkeyConfig)
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      
+      // Detect rate limit / quota exhaustion errors
+      if (isRateLimitError(response.status, errText)) {
+        const retryAfter = extractRetryAfterSeconds(response.headers);
+        logger.warn(
+          `⚠ Rate limit / quota exceeded on Portkey (HTTP ${response.status}). ` +
+          `Retry-After: ${retryAfter ?? 'unknown'}s. Response: ${errText.slice(0, 300)}`
+        );
+        throw new RateLimitError('Portkey (All Fallbacks)', retryAfter, errText.slice(0, 500));
+      }
+
+      throw new Error(`API returned status ${response.status}: ${errText}`);
+    }
+
+    const resJson = await response.json();
+    const text = resJson.choices?.[0]?.message?.content;
+    if (!text) {
+      throw new Error('Empty content in API response.');
+    }
+
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    }
+
+    logger.debug(`Successfully received response from Portkey Gateway. Parsing content...`);
+    const parsedData = JSON.parse(cleanedText);
+    const validated = params.schema.parse(parsedData);
+
+    return validated;
+
+  } catch (err: unknown) {
+    logger.error(`Portkey multi-agent generation failed:`, err);
+    throw err;
   }
 
-  // If the last error was a rate limit error, propagate it directly for clean UI handling
-  if (lastError instanceof RateLimitError) {
-    throw new RateLimitError(
-      'all configured providers',
-      lastError.retryAfterSeconds,
-      'All LLM provider quotas have been exhausted.'
-    );
-  }
 
-  throw new Error(`All LLM providers failed. Last error: ${lastError?.message || JSON.stringify(lastError)}`);
 }

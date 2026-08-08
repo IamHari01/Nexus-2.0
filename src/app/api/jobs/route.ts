@@ -6,7 +6,7 @@ import { DBManager } from '@/lib/db';
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const userId = session?.user ? (session.user as any).id : null;
+    const userId = session?.user ? (session.user as { id?: string }).id : null;
 
     if (!userId) {
       return NextResponse.json(

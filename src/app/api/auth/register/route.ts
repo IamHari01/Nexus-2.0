@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       { message: 'User registered successfully.' },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration Error:', error);
     return NextResponse.json(
       { message: 'Internal server error.' },

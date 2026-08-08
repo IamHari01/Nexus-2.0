@@ -145,13 +145,13 @@ export default function AnalysisForm({ onAnalyze, isLoading }: AnalysisFormProps
 
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
+        const pdf = (await loadingTask.promise) as any;
         
         let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
+          fullText += textContent.items.map((item: { str: string }) => item.str).join(' ') + '\n';
         }
         
         if (!fullText.trim()) {

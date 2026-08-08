@@ -26,13 +26,13 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
   error?: string;
 }> {
   // Check for API key existence
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.PORTKEY_API_KEY;
 
   
   if (!apiKey) {
     return {
       success: false,
-      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
+      error: 'Portkey API key is missing. Please set PORTKEY_API_KEY in your .env file.',
     };
   }
 
@@ -62,7 +62,7 @@ export async function runInitialAnalysis(data: ShortlistingProbabilityInput): Pr
     if (e.message?.includes('API key not valid') || e.message?.includes('400') || e.message?.includes('401')) {
       return {
         success: false,
-        error: 'Your Groq API key appears to be invalid or expired. Please verify it in your .env file.',
+        error: 'Your Portkey API key appears to be invalid or expired. Please verify it in your .env file.',
       };
     }
 
@@ -103,11 +103,11 @@ export async function parseResumeAction(resumeText: string): Promise<{
   data?: CandidateProfile;
   error?: string;
 }> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.PORTKEY_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
+      error: 'Portkey API key is missing. Please set PORTKEY_API_KEY in your .env file.',
     };
   }
 
@@ -134,16 +134,16 @@ export async function fetchAndMatchJobsAction(
   result?: MultiAgentResult;
   error?: string;
 }> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.PORTKEY_API_KEY;
   if (!apiKey) {
     return {
       success: false,
-      error: 'Groq API key is missing. Please set GROQ_API_KEY in your .env file.',
+      error: 'Portkey API key is missing. Please set PORTKEY_API_KEY in your .env file.',
     };
   }
 
   const session = await getServerSession(authOptions);
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user ? (session.user as { id?: string }).id : null;
 
   if (!userId) {
     return {

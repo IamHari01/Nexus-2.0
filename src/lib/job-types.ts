@@ -14,7 +14,7 @@ export interface Job {
   publisher?: string;
   benefits?: string[];
   required_skills?: string[];
-  raw_data?: any; // Original API payload for debugging
+  raw_data?: unknown; // Original API payload for debugging
 }
 
 export interface CandidateProfile {
@@ -46,7 +46,7 @@ export interface JobMatchResult {
   missing_skills: string[];
   learning_path: Array<{
     skill: string;
-    priority: string; // Critical, High, Medium, Low
+    priority: 'Critical' | 'High' | 'Medium' | 'Low'; // Critical, High, Medium, Low
     youtube_query: string;
     estimated_time: string;
   }>;

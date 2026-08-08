@@ -94,9 +94,10 @@ export const deepMatchFlow = ai.defineFlow(
 
     const matchOut = await generateStructuredOutput({
       prompt: promptText,
-      schema: JobMatchResultSchema as any
+      schema: JobMatchResultSchema as unknown as z.ZodSchema<JobMatchResult>
     });
-    return matchOut as any;
+
+    return matchOut;
   }
 );
 

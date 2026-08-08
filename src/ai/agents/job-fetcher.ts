@@ -1,5 +1,6 @@
 import { Job } from '@/lib/job-types';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // Helper to generate deterministic job IDs based on title and company
 function generateJobId(title: string, company: string): string {
@@ -18,7 +19,16 @@ async function fetchJobsFromRemotive(query: string): Promise<Job[]> {
     
     if (!data.jobs || !Array.isArray(data.jobs)) return [];
 
-    return data.jobs.map((item: any) => ({
+    return data.jobs.map((item: {
+      title: string;
+      company_name: string;
+      candidate_required_location?: string;
+      description?: string;
+      url?: string;
+      salary?: string;
+      publication_date?: string;
+      job_type?: string;
+    }) => ({
       id: generateJobId(item.title, item.company_name),
       job_title: item.title,
       company: item.company_name,
@@ -31,8 +41,8 @@ async function fetchJobsFromRemotive(query: string): Promise<Job[]> {
       employment_type: item.job_type || 'Full-time',
       is_remote: true,
     }));
-  } catch (e) {
-    console.error('Failed to fetch from Remotive API:', e);
+  } catch (e: unknown) {
+    logger.error('Failed to fetch from Remotive API:', e);
     return [];
   }
 }
@@ -69,7 +79,7 @@ async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job
   const appKey = process.env.ADZUNA_APP_KEY || process.env.NEXT_PUBLIC_ADZUNA_APP_KEY;
 
   if (!appId || !appKey) {
-    console.log('Adzuna API credentials missing. Skipping Adzuna fetch.');
+    logger.warn('Adzuna API credentials missing. Skipping Adzuna fetch.');
     return [];
   }
 
@@ -82,7 +92,15 @@ async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job
 
     if (!data.results || !Array.isArray(data.results)) return [];
 
-    return data.results.map((item: any) => ({
+    return data.results.map((item: {
+      title: string;
+      company?: { display_name?: string };
+      location?: { display_name?: string };
+      description?: string;
+      redirect_url?: string;
+      salary_min?: number;
+      created?: string;
+    }) => ({
       id: generateJobId(item.title, item.company?.display_name || ''),
       job_title: item.title,
       company: item.company?.display_name || 'Confidential',
@@ -92,16 +110,16 @@ async function fetchJobsFromAdzuna(query: string, location: string): Promise<Job
       source: 'Adzuna',
       salary: item.salary_min ? `$${Math.round(item.salary_min).toLocaleString()}` : undefined,
       posted_at: item.created,
-      is_remote: item.title.toLowerCase().includes('remote') || item.description.toLowerCase().includes('remote'),
+      is_remote: item.title.toLowerCase().includes('remote') || (item.description?.toLowerCase().includes('remote') ?? false),
     }));
-  } catch (e) {
-    console.error('Failed to fetch from Adzuna API:', e);
+  } catch (e: unknown) {
+    logger.error('Failed to fetch from Adzuna API:', e);
     return [];
   }
 }
 
 // Helper to format JSearch salaries dynamically
-function formatJSearchSalary(item: any): string | undefined {
+function formatJSearchSalary(item: { job_min_salary?: number; job_max_salary?: number; job_salary_currency?: string; job_salary_period?: string; }): string | undefined {
   if (!item.job_min_salary) return undefined;
   
   const minSal = Math.round(item.job_min_salary).toLocaleString();
@@ -126,7 +144,7 @@ async function fetchJobsFromJSearch(
   const apiKey = rawApiKey?.trim();
 
   if (!apiKey) {
-    console.log(`[${sourceName}] JSearch API key missing. Skipping fetch.`);
+    logger.warn(`[${sourceName}] JSearch API key missing. Skipping fetch.`);
     return [];
   }
 
@@ -159,7 +177,29 @@ async function fetchJobsFromJSearch(
 
     if (!data.data || !Array.isArray(data.data)) return [];
 
-    return data.data.slice(0, 10).map((item: any) => ({
+    return data.data.slice(0, 10).map((item: {
+      job_id?: string;
+      job_title: string;
+      employer_name: string;
+      job_city?: string;
+      job_state?: string;
+      job_country?: string;
+      job_is_remote?: boolean;
+      job_description?: string;
+      job_apply_link?: string;
+      job_google_link?: string;
+      job_min_salary?: number;
+      job_max_salary?: number;
+      job_salary_currency?: string;
+      job_salary_period?: string;
+      job_posted_at_datetime_utc?: string;
+      job_posted_at_timestamp?: string;
+      job_employment_type?: string;
+      employer_logo?: string;
+      job_publisher?: string;
+      job_benefits?: string[];
+      job_required_skills?: string[];
+    }) => ({
       id: item.job_id || generateJobId(item.job_title, item.employer_name),
       job_title: item.job_title,
       company: item.employer_name,
@@ -176,8 +216,8 @@ async function fetchJobsFromJSearch(
       benefits: item.job_benefits || undefined,
       required_skills: item.job_required_skills || undefined,
     }));
-  } catch (e) {
-    console.error(`Failed to fetch from ${sourceName} API:`, e);
+  } catch (e: unknown) {
+    logger.error(`Failed to fetch from ${sourceName} API:`, e);
     return [];
   }
 }
@@ -209,7 +249,16 @@ async function fetchJobsFromArbeitnow(
 
     if (!data.data || !Array.isArray(data.data)) return [];
 
-    return data.data.slice(0, 10).map((item: any) => ({
+    return data.data.slice(0, 10).map((item: {
+      title: string;
+      company_name: string;
+      location?: string;
+      description?: string;
+      url?: string;
+      created_at: number;
+      job_types?: string[];
+      remote?: boolean;
+    }) => ({
       id: generateJobId(item.title, item.company_name),
       job_title: item.title,
       company: item.company_name,
@@ -221,8 +270,8 @@ async function fetchJobsFromArbeitnow(
       employment_type: item.job_types?.[0] || 'Full-time',
       is_remote: item.remote || false,
     }));
-  } catch (e) {
-    console.error('Failed to fetch from Arbeitnow API:', e);
+  } catch (e: unknown) {
+    logger.error('Failed to fetch from Arbeitnow API:', e);
     return [];
   }
 }
@@ -237,7 +286,7 @@ async function fetchJobsFromSerpApi(
   const apiKey = rawApiKey?.trim();
 
   if (!apiKey) {
-    console.log('SerpApi API key missing. Skipping SerpApi fetch.');
+    logger.warn('SerpApi API key missing. Skipping SerpApi fetch.');
     return [];
   }
 
@@ -251,7 +300,16 @@ async function fetchJobsFromSerpApi(
 
     const jobsList = data.jobs_results || [];
 
-    return jobsList.slice(0, 10).map((item: any) => {
+    return jobsList.slice(0, 10).map((item: {
+      job_id?: string;
+      title: string;
+      company_name?: string;
+      location?: string;
+      description?: string;
+      share_link?: string;
+      thumbnail?: string;
+      extensions?: string[];
+    }) => {
       const extensions = item.extensions || [];
       const isRemote = extensions.some((ext: string) => 
         ext.toLowerCase().includes('remote') || 
@@ -277,8 +335,8 @@ async function fetchJobsFromSerpApi(
         company_logo: item.thumbnail || undefined,
       };
     });
-  } catch (e) {
-    console.error('Failed to fetch from SerpApi:', e);
+  } catch (e: unknown) {
+    logger.error('Failed to fetch from SerpApi:', e);
     return [];
   }
 }
@@ -491,11 +549,11 @@ export async function fetchJobs(
   // Check cache first
   const cached = jobCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    console.log(`[Cache Hit] Returning ${cached.jobs.length} cached jobs for key: "${cacheKey}"`);
+    logger.debug(`[Cache Hit] Returning ${cached.jobs.length} cached jobs for key: "${cacheKey}"`);
     return cached.jobs;
   }
 
-  console.log(`[Cache Miss] Starting Job Fetching Agent. Query: "${query}", Location: "${location}", RemoteOnly: ${remoteOnly}`);
+  logger.debug(`[Cache Miss] Starting Job Fetching Agent. Query: "${query}", Location: "${location}", RemoteOnly: ${remoteOnly}`);
   
   // Call APIs concurrently, splitting processes across the keys provided by the user
   const jsearchKey = process.env.JSEARCH_API_KEY;
@@ -561,10 +619,10 @@ export async function fetchJobs(
 
   // Fallback to high-quality mock data if API results are dry/rate-limited/credentials missing
   if (uniqueJobs.length === 0) {
-    console.log('No live jobs found. Generating realistic matched mock jobs as fallback.');
+    logger.warn('No live jobs found. Generating realistic matched mock jobs as fallback.');
     uniqueJobs = getMockJobs(query, location, remoteOnly);
   } else if (uniqueJobs.length < 20) {
-    console.log(`Aggregated live job count is only ${uniqueJobs.length}. Supplementing with mock jobs to guarantee 20+ entries.`);
+    logger.info(`Aggregated live job count is only ${uniqueJobs.length}. Supplementing with mock jobs to guarantee 20+ entries.`);
     const mockJobs = getMockJobs(query, location, remoteOnly);
     const existingTitles = new Set(uniqueJobs.map(j => j.job_title.toLowerCase()));
     
@@ -592,6 +650,6 @@ export async function fetchJobs(
     jobs: uniqueJobs,
   });
 
-  console.log(`Job Fetching Agent complete. Aggregated ${uniqueJobs.length} normalized jobs.`);
+  logger.info(`Job Fetching Agent complete. Aggregated ${uniqueJobs.length} normalized jobs.`);
   return uniqueJobs;
 }

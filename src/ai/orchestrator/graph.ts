@@ -1,4 +1,5 @@
 import { StateGraph, Annotation } from '@langchain/langgraph';
+import { logger } from '@/lib/logger';
 import { 
   CandidateProfile, 
   Job, 
@@ -93,10 +94,11 @@ async function resumeParserNode(state: AgentStateType): Promise<Partial<AgentSta
       retries: res.retries,
       confidenceScores: { resumeParser: res.parserConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `ResumeParser failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'ResumeParser', 'failed', `Fatal parser exception: ${err.message || err}`)
+      error: `ResumeParser failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'ResumeParser', 'failed', `Fatal parser exception: ${errorMsg}`)
     };
   }
 }
@@ -113,10 +115,11 @@ async function jobFetcherNode(state: AgentStateType): Promise<Partial<AgentState
       retries: res.retries,
       confidenceScores: { jobFetcher: res.fetcherConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `JobFetcher failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'JobFetcher', 'failed', `Fatal fetcher exception: ${err.message || err}`)
+      error: `JobFetcher failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'JobFetcher', 'failed', `Fatal fetcher exception: ${errorMsg}`)
     };
   }
 }
@@ -133,10 +136,11 @@ async function marketAnalyzerNode(state: AgentStateType): Promise<Partial<AgentS
       retries: res.retries,
       confidenceScores: { marketAnalyzer: res.marketConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `MarketAnalyzer failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'MarketAnalyzer', 'failed', `Fatal market-analysis exception: ${err.message || err}`)
+      error: `MarketAnalyzer failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'MarketAnalyzer', 'failed', `Fatal market-analysis exception: ${errorMsg}`)
     };
   }
 }
@@ -152,10 +156,11 @@ async function opportunityRankerNode(state: AgentStateType): Promise<Partial<Age
       retries: res.retries,
       confidenceScores: { opportunityRanker: res.rankerConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `OpportunityRanker failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'OpportunityRanker', 'failed', `Fatal ranker exception: ${err.message || err}`)
+      error: `OpportunityRanker failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'OpportunityRanker', 'failed', `Fatal ranker exception: ${errorMsg}`)
     };
   }
 }
@@ -176,10 +181,11 @@ async function resumeOptimizerNode(state: AgentStateType): Promise<Partial<Agent
       retries: res.retries,
       confidenceScores: { resumeOptimizer: res.optimizerConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `ResumeOptimizer failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'ResumeOptimizer', 'failed', `Fatal optimizer exception: ${err.message || err}`)
+      error: `ResumeOptimizer failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'ResumeOptimizer', 'failed', `Fatal optimizer exception: ${errorMsg}`)
     };
   }
 }
@@ -200,10 +206,11 @@ async function recommendationGeneratorNode(state: AgentStateType): Promise<Parti
       retries: res.retries,
       confidenceScores: { recommendationGenerator: res.recommendationConfidence }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message || String(err);
     return {
-      error: `RecommendationGenerator failed: ${err.message || err}`,
-      logs: logTrace(state.logs, 'RecommendationGenerator', 'failed', `Fatal recommendation exception: ${err.message || err}`)
+      error: `RecommendationGenerator failed: ${errorMsg}`,
+      logs: logTrace(state.logs, 'RecommendationGenerator', 'failed', `Fatal recommendation exception: ${errorMsg}`)
     };
   }
 }
@@ -327,7 +334,7 @@ export async function runOrchestrator(inputs: {
   location: string;
   remoteOnly: boolean;
 }): Promise<MultiAgentResult> {
-  console.log('[Orchestrator] Launching Multi-Agent StateGraph runtime...');
+  logger.info('[Orchestrator] Launching Multi-Agent StateGraph runtime...');
   
   const initialState: Partial<AgentStateType> = {
     resumeText: inputs.resumeText,
